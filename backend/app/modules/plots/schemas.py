@@ -4,11 +4,20 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.modules.plots.catalog import SPECIES_CODES
+
 
 class PlantingInput(BaseModel):
     species_code: str = Field(min_length=2, max_length=40, pattern=r"^[A-Z0-9_-]+$")
     trees_planted: int = Field(gt=0, le=1_000_000)
     planted_on: date
+
+    @field_validator("species_code")
+    @classmethod
+    def known_species(cls, value: str) -> str:
+        if value not in SPECIES_CODES:
+            raise ValueError("Choose a species from the EcoTrees species list.")
+        return value
 
     @field_validator("planted_on")
     @classmethod

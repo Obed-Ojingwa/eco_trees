@@ -95,11 +95,16 @@ class XtradotBankClient:
                     headers=headers,
                     json=json_body,
                 )
-            except httpx.RequestError:
+            except httpx.RequestError as exc:
                 self._write_log(request_id, method, safe_path, None, started)
-                logger.exception(
-                    "Bank request failed",
-                    extra={"method": method, "path": safe_path, "request_id": request_id},
+                logger.error(
+                    "Bank request failed with %s",
+                    type(exc).__name__,
+                    extra={
+                        "method": method,
+                        "path": safe_path,
+                        "request_id": request_id,
+                    },
                 )
                 raise
 
@@ -114,7 +119,8 @@ class XtradotBankClient:
                 except ValueError:
                     delay = 0
                 if delay == 0:
-                    delay = min(2.0, 0.2 * (2**attempt)) * random.uniform(0.75, 1.25)
+                    delay = min(2.0, 0.2 * (2**attempt))
+                delay = min(5.0, delay * random.uniform(0.75, 1.25))
                 time.sleep(delay)
                 continue
             break

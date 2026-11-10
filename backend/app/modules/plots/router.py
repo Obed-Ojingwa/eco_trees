@@ -1,6 +1,7 @@
 import hashlib
 import json
 import logging
+from collections import defaultdict
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, Form, Response, UploadFile
@@ -11,34 +12,12 @@ from app.core.dependencies import get_current_user, require_roles
 from app.core.errors import ApiError
 from app.db.pool import connection
 from app.modules.points import award_points, create_notification
+from app.modules.plots.catalog import SPECIES
 from app.modules.plots.schemas import PlotCreate, PlotPreflight
 
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["plots"])
-
-SPECIES = [
-    {
-        "code": "GMELINA",
-        "common_name": "Gmelina",
-        "scientific_name": "Gmelina arborea",
-    },
-    {
-        "code": "CASHEW",
-        "common_name": "Cashew",
-        "scientific_name": "Anacardium occidentale",
-    },
-    {
-        "code": "NEEM",
-        "common_name": "Neem",
-        "scientific_name": "Azadirachta indica",
-    },
-    {
-        "code": "MANGROVE",
-        "common_name": "Mangrove",
-        "scientific_name": "Rhizophora spp.",
-    },
-]
 
 DB_GEOMETRY_ERRORS = {
     "PLOT_OVERLAP": (409, "PLOT_OVERLAP", "This plot overlaps an existing registered plot."),
@@ -60,7 +39,7 @@ def _plot_access(plot_id: UUID, user: dict) -> dict:
     with connection() as conn:
         plot = conn.execute(
             """
-            SELECT p.id, p.farmer_id, p.geom, p.area_ha, p.status,
+            SELECT p.id, p.farmer_id, p.area_ha, p.status,
                    p.monitoring_state, p.flags, p.created_at, p.updated_at,
                    u.display_name AS farmer_display_name
             FROM plots p
@@ -79,25 +58,11 @@ def _plot_access(plot_id: UUID, user: dict) -> dict:
     return plot
 
 
-def _serialize_plot(row: dict, conn) -> dict:
-    plantings = conn.execute(
-        """
-        SELECT id, species_code, trees_planted, planted_on
-        FROM plantings
-        WHERE plot_id = %s
-        ORDER BY planted_on, species_code
-        """,
-        (row["id"],),
-    ).fetchall()
-    photos = conn.execute(
-        """
-        SELECT id, captured_at, accuracy_m, distance_m, gps_match, flags
-        FROM plot_photos
-        WHERE plot_id = %s
-        ORDER BY created_at DESC
-        """,
-        (row["id"],),
-    ).fetchall()
+def _serialize_plot(
+    row: dict,
+    plantings: list[dict],
+    photos: list[dict],
+) -> dict:
     return {
         "id": str(row["id"]),
         "farmer_id": str(row["farmer_id"]),
@@ -109,7 +74,15 @@ def _serialize_plot(row: dict, conn) -> dict:
         "flags": row["flags"],
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
-        "plantings": plantings,
+        "plantings": [
+            {
+                "id": str(planting["id"]),
+                "species_code": planting["species_code"],
+                "trees_planted": planting["trees_planted"],
+                "planted_on": planting["planted_on"],
+            }
+            for planting in plantings
+        ],
         "photos": [
             {
                 "id": str(photo["id"]),
@@ -127,13 +100,15 @@ def _serialize_plot(row: dict, conn) -> dict:
 
 @router.get("/species")
 def list_species() -> dict:
-    return {"items": SPECIES}
+    return {"items": list(SPECIES)}
 
 
-@router.post("/plots/preflight")
+@router.post(
+    "/plots/preflight",
+    dependencies=[Depends(require_roles("farmer", "admin"))],
+)
 def preflight_plot(
     payload: PlotPreflight,
-    _user: dict = Depends(require_roles("farmer", "admin")),
 ) -> dict:
     geojson = json.dumps(payload.geometry.as_geojson(), separators=(",", ":"))
     try:
@@ -254,7 +229,16 @@ def create_plot(
                 "Your plot has been mapped.",
                 points=points,
             )
-            response = _serialize_plot(plot, conn)
+            plantings = conn.execute(
+                """
+                SELECT id, species_code, trees_planted, planted_on
+                FROM plantings
+                WHERE plot_id = %s
+                ORDER BY planted_on, species_code
+                """,
+                (plot_id,),
+            ).fetchall()
+            response = _serialize_plot(plot, plantings, [])
     except RaiseException as exc:
         raise _map_geometry_error(exc)
     except DataException as exc:
@@ -275,7 +259,7 @@ def list_plots(user: dict = Depends(get_current_user)) -> dict:
         if user["role"] in {"auditor", "admin"}:
             rows = conn.execute(
                 """
-                SELECT p.id, p.farmer_id, p.geom, ST_AsGeoJSON(p.geom) AS geometry,
+                SELECT p.id, p.farmer_id, ST_AsGeoJSON(p.geom) AS geometry,
                        p.area_ha, p.status, p.monitoring_state, p.flags,
                        p.created_at, p.updated_at, u.display_name AS farmer_display_name
                 FROM plots p JOIN users u ON u.id = p.farmer_id
@@ -286,7 +270,7 @@ def list_plots(user: dict = Depends(get_current_user)) -> dict:
         else:
             rows = conn.execute(
                 """
-                SELECT p.id, p.farmer_id, p.geom, ST_AsGeoJSON(p.geom) AS geometry,
+                SELECT p.id, p.farmer_id, ST_AsGeoJSON(p.geom) AS geometry,
                        p.area_ha, p.status, p.monitoring_state, p.flags,
                        p.created_at, p.updated_at, NULL::text AS farmer_display_name
                 FROM plots p
@@ -296,7 +280,41 @@ def list_plots(user: dict = Depends(get_current_user)) -> dict:
                 """,
                 (user["id"],),
             ).fetchall()
-        return {"items": [_serialize_plot(row, conn) for row in rows]}
+        plot_ids = [row["id"] for row in rows]
+        if not plot_ids:
+            return {"items": []}
+        plantings_by_plot: dict[UUID, list[dict]] = defaultdict(list)
+        for planting in conn.execute(
+            """
+            SELECT plot_id, id, species_code, trees_planted, planted_on
+            FROM plantings
+            WHERE plot_id = ANY(%s)
+            ORDER BY plot_id, planted_on, species_code
+            """,
+            (plot_ids,),
+        ).fetchall():
+            plantings_by_plot[planting["plot_id"]].append(planting)
+        photos_by_plot: dict[UUID, list[dict]] = defaultdict(list)
+        for photo in conn.execute(
+            """
+            SELECT plot_id, id, captured_at, accuracy_m, distance_m, gps_match, flags
+            FROM plot_photos
+            WHERE plot_id = ANY(%s)
+            ORDER BY plot_id, created_at DESC
+            """,
+            (plot_ids,),
+        ).fetchall():
+            photos_by_plot[photo["plot_id"]].append(photo)
+        return {
+            "items": [
+                _serialize_plot(
+                    row,
+                    plantings_by_plot[row["id"]],
+                    photos_by_plot[row["id"]],
+                )
+                for row in rows
+            ]
+        }
 
 
 @router.get("/plots/{plot_id}")
@@ -310,7 +328,25 @@ def get_plot(
             "SELECT ST_AsGeoJSON(geom) AS geometry FROM plots WHERE id = %s",
             (plot_id,),
         ).fetchone()["geometry"]
-        return _serialize_plot(row, conn)
+        plantings = conn.execute(
+            """
+            SELECT id, species_code, trees_planted, planted_on
+            FROM plantings
+            WHERE plot_id = %s
+            ORDER BY planted_on, species_code
+            """,
+            (row["id"],),
+        ).fetchall()
+        photos = conn.execute(
+            """
+            SELECT id, captured_at, accuracy_m, distance_m, gps_match, flags
+            FROM plot_photos
+            WHERE plot_id = %s
+            ORDER BY created_at DESC
+            """,
+            (row["id"],),
+        ).fetchall()
+        return _serialize_plot(row, plantings, photos)
 
 
 def _image_type(content_type: str | None, content: bytes) -> str | None:
@@ -327,7 +363,7 @@ def _image_type(content_type: str | None, content: bytes) -> str | None:
 
 
 @router.post("/plots/{plot_id}/photos", status_code=201)
-async def upload_plot_photo(
+def upload_plot_photo(
     plot_id: UUID,
     file: UploadFile = File(...),
     latitude: float = Form(..., ge=-90, le=90),
@@ -335,8 +371,8 @@ async def upload_plot_photo(
     accuracy_m: float = Form(..., ge=0, le=100_000),
     user: dict = Depends(require_roles("farmer")),
 ) -> dict:
-    content = await file.read(settings.max_photo_bytes + 1)
-    await file.close()
+    content = file.file.read(settings.max_photo_bytes + 1)
+    file.file.close()
     if not content:
         raise ApiError(422, "EMPTY_PHOTO", "Choose a photo to upload.")
     if len(content) > settings.max_photo_bytes:

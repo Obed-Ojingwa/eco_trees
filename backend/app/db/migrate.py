@@ -12,6 +12,8 @@ logger = logging.getLogger(__name__)
 
 
 def migrate(migration_dir: Path | None = None) -> list[str]:
+    if not settings.migration_database_url:
+        raise RuntimeError("DB_MIGRATION_URL must be set to run database migrations.")
     directory = migration_dir or settings.migration_dir
     applied: list[str] = []
     with psycopg.connect(settings.migration_database_url, row_factory=dict_row) as conn:

@@ -1,9 +1,11 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.integrations.mock_bank import app as mock_bank_app
 
 
 client = TestClient(app)
+mock_bank_client = TestClient(mock_bank_app)
 
 
 def test_legacy_endpoint_remains_available() -> None:
@@ -34,3 +36,24 @@ def test_validation_errors_use_the_api_error_envelope() -> None:
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
     assert response.json()["error"]["details"]["fields"]
+
+
+def test_mock_bank_rejects_missing_api_key(monkeypatch) -> None:
+    monkeypatch.setenv("GATEWAY_KEY", "local-test-key")
+
+    response = mock_bank_client.get("/v1/banks")
+
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "INVALID_API_KEY"
+
+
+def test_mock_bank_accepts_configured_api_key(monkeypatch) -> None:
+    monkeypatch.setenv("GATEWAY_KEY", "local-test-key")
+
+    response = mock_bank_client.get(
+        "/v1/banks",
+        headers={"x-api-key": "local-test-key"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]

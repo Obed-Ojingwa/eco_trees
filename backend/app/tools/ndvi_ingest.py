@@ -54,17 +54,10 @@ def _scene_items(
     cloud_limit: float,
 ) -> list[Any]:
     plot = shape(geometry)
-    centroid = plot.centroid
-    approximate_bbox = (
-        centroid.x - 0.02,
-        centroid.y - 0.02,
-        centroid.x + 0.02,
-        centroid.y + 0.02,
-    )
     catalog = Client.open(STAC_URL)
     search = catalog.search(
         collections=["sentinel-2-l2a"],
-        bbox=approximate_bbox,
+        bbox=plot.bounds,
         datetime=f"{planted_on - timedelta(days=365)}/{today}",
         query={"eo:cloud_cover": {"lt": cloud_limit}},
     )
@@ -90,6 +83,7 @@ def _process_plot(
     ingest_token: str,
     cloud_limit: float,
     min_valid_pixels: int,
+    dry_run: bool,
 ) -> int:
     geometry = plot["geometry"]
     plot_shape = shape(geometry)
@@ -106,12 +100,9 @@ def _process_plot(
         for item in all_geometries
         if item != geometry
     ]
-    controls = []
-    for other in other_plots:
-        controls.append(other)
     control = plot_projected.buffer(100).difference(plot_projected.buffer(20))
-    if controls:
-        control = control.difference(unary_union(controls))
+    if other_plots:
+        control = control.difference(unary_union(other_plots))
     if control.is_empty:
         logger.info("Skipping %s: no registered-plot-free control ring", plot["id"])
         return 0
@@ -175,12 +166,23 @@ def _process_plot(
                 "plot_pixel_resolution_m": resolution,
             },
         }
-        response = api.post(
-            "/api/internal/ndvi",
-            headers={"X-Ingest-Token": ingest_token, "X-EcoTrees": "1"},
-            json=payload,
-        )
-        response.raise_for_status()
+        if dry_run:
+            logger.info(
+                "Dry run %s %s: plot NDVI %.4f, control NDVI %.4f, valid pixels %d/%d",
+                plot["id"],
+                item.id,
+                payload["ndvi_plot"],
+                payload["ndvi_control"],
+                plot_count,
+                control_count,
+            )
+        else:
+            response = api.post(
+                "/api/internal/ndvi",
+                headers={"X-Ingest-Token": ingest_token, "X-EcoTrees": "1"},
+                json=payload,
+            )
+            response.raise_for_status()
         ingested += 1
     return ingested
 
@@ -190,15 +192,22 @@ def main() -> int:
     parser.add_argument("--api-base", default=os.getenv("API_BASE_URL", "http://127.0.0.1:8000"))
     parser.add_argument("--cloud-limit", type=float, default=30)
     parser.add_argument("--min-valid-pixels", type=int, default=5)
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Calculate and report NDVI without uploading observations.",
+    )
     args = parser.parse_args()
     api_token = os.getenv("INGEST_TOKEN")
     if not api_token:
         parser.error("Set INGEST_TOKEN in the environment.")
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    headers = {"X-Ingest-Token": api_token}
     with httpx.Client(base_url=args.api_base.rstrip("/"), timeout=60) as api:
-        response = api.get("/api/internal/plots", headers=headers)
+        response = api.get(
+            "/api/internal/plots",
+            headers={"X-Ingest-Token": api_token},
+        )
         response.raise_for_status()
         plots = response.json()["items"]
         geometries = [item["geometry"] for item in plots]
@@ -211,6 +220,7 @@ def main() -> int:
                 api_token,
                 args.cloud_limit,
                 args.min_valid_pixels,
+                args.dry_run,
             )
             logger.info("Plot %s: imported %d observation(s)", plot["id"], ingested)
             total += ingested

@@ -249,10 +249,15 @@ Farmer (own plot), auditor, and admin access. Returns current `monitoring_state`
 
 ## Local development and implementation boundary
 
-1. Start PostGIS and the local mock bank with `docker compose -f backend/docker-compose.yml up -d db mock_bank`.
-2. Set backend variables from `backend/.env.example`.
-3. Run migrations from `backend/` with `DB_MIGRATION_URL` set: `python -m app.db.migrate`.
-4. Start the API: `uvicorn main:app --reload --app-dir backend` from the workspace root, or run it from `backend/` as `uvicorn main:app --reload`.
-5. Install `backend/requirements-ndvi.txt` on an internet-connected ingestion machine to run `python -m app.tools.ndvi_ingest`.
+1. From `backend/`, copy `.env.example` to `.env` and set distinct local `DB_ADMIN_PASSWORD` and `DB_APP_PASSWORD` values.
+2. With Docker Compose installed, from `backend/` run `docker compose up -d db mock_bank`.
+3. Create and activate a Python 3.12 virtual environment, then install dependencies with `pip install -r requirements.txt`.
+4. Export the environment in the API shell with `set -a; . ./.env; set +a`, then run `python -m app.db.migrate`.
+5. Start the API from `backend/` with `uvicorn main:app --reload`.
+6. To run tests, install `requirements-dev.txt` and run `python -m pytest`.
+7. To seed synthetic non-farmer roles, set `DEMO_USERS_JSON` to a JSON array and run `python -m app.db.seed_users`. Farmer accounts register through the API.
+8. For Sentinel-2 ingestion, install `requirements-ndvi.txt` on an internet-connected machine, export the same API URL and ingest token, then run `python -m app.tools.ndvi_ingest --dry-run` before uploading observations.
+
+The Kubernetes manifests are in `backend/k8s/`. Create secrets outside source control: `ecotrees-db-admin` (`DB_ADMIN_PASSWORD`, `DB_APP_PASSWORD`), `ecotrees-secrets` (`DB_URL`, `JWT_SECRET`, `INGEST_TOKEN`), and `ecotrees-migration` (`DB_MIGRATION_URL`). The pre-provisioned `huawei-gateway` secret supplies `GATEWAY_KEY`. Build the API image for `linux/amd64`, apply `db.yaml`, wait for the database, run `migrate-job.yaml`, then apply `api.yaml`. The API service is internal; the frontend's public service proxies requests to it.
 
 `GET /api/farmer/home`, account setup, carbon estimates, batches, marketplace, payments, and payouts belong to later backend phases and are not implemented by this B0–B3 contract.

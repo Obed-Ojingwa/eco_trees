@@ -4,13 +4,14 @@ services:
     environment:
       POSTGRES_DB: ecotrees
       POSTGRES_USER: ecotrees_admin
-      POSTGRES_PASSWORD: ecotrees-admin-local-only
+      POSTGRES_PASSWORD: ${DB_ADMIN_PASSWORD:?Set DB_ADMIN_PASSWORD in backend/.env}
+      DB_APP_PASSWORD: ${DB_APP_PASSWORD:?Set DB_APP_PASSWORD in backend/.env}
     ports:
       - "5432:5432"
     volumes:
       - ./app/db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ecotrees -d ecotrees"]
+      test: ["CMD-SHELL", "pg_isready -U ecotrees_admin -d ecotrees"]
       interval: 5s
       timeout: 3s
       retries: 20
