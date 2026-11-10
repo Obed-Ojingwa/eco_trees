@@ -1,0 +1,34 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ecotrees-migrate
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 300
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: ecotrees-migrate
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: migrate
+          image: <registry>/ecotrees-api:<git-sha>
+          command:
+            - python
+            - -m
+            - app.db.migrate
+          env:
+            - name: ENVIRONMENT
+              value: migration
+            - name: DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ecotrees-secrets
+                  key: DB_URL
+            - name: DB_MIGRATION_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ecotrees-migration
+                  key: DB_MIGRATION_URL

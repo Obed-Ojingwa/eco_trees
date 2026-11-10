@@ -63,3 +63,17 @@ def test_insufficient_observations_stay_pending() -> None:
 
     assert assessment.state == "pending"
     assert assessment.observation_count == 3
+
+
+def test_sustained_recovery_returns_frozen_plot_to_ok() -> None:
+    assessment = assess_monitoring(
+        _series([0.3, 0.3, 0.3, -0.1, -0.1, -0.1, 0.3, 0.3, 0.3, 0.3, 0.3]),
+        AssessmentParameters(
+            min_observations=4,
+            rolling_n=2,
+            freeze_consecutive=2,
+            recover_consecutive=2,
+        ),
+    )
+
+    assert assessment.state == "ok"

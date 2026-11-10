@@ -39,6 +39,7 @@ app = FastAPI(
     title="EcoTrees API",
     version="0.1.0",
     docs_url=None if settings.environment.lower() in {"production", "prod"} else "/docs",
+    openapi_url=None if settings.environment.lower() in {"production", "prod"} else "/openapi.json",
     redoc_url=None,
     lifespan=lifespan,
 )
@@ -95,7 +96,7 @@ async def request_context(request: Request, call_next):
 
 
 @app.exception_handler(ApiError)
-async def api_error_handler(request: Request, exc: ApiError) -> JSONResponse:
+async def api_error_handler(_request: Request, exc: ApiError) -> JSONResponse:
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -111,7 +112,7 @@ async def api_error_handler(request: Request, exc: ApiError) -> JSONResponse:
 
 @app.exception_handler(RequestValidationError)
 async def validation_error_handler(
-    request: Request,
+    _request: Request,
     exc: RequestValidationError,
 ) -> JSONResponse:
     errors = [

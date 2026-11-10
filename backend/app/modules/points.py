@@ -14,6 +14,10 @@ def award_points(
 ) -> int:
     awarded = points
     if reason == "photo_uploaded":
+        conn.execute(
+            "SELECT id FROM users WHERE id = %s FOR UPDATE",
+            (farmer_id,),
+        )
         earned_this_week = conn.execute(
             """
             SELECT COALESCE(sum(points), 0) AS total

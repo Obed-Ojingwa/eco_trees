@@ -7,22 +7,25 @@ def _csv(value: str) -> tuple[str, ...]:
     return tuple(part.strip() for part in value.split(",") if part.strip())
 
 
+def _default_cors_origins(environment: str) -> tuple[str, ...]:
+    if environment.lower() in {"development", "local", "test"}:
+        return ("http://localhost:5173", "http://127.0.0.1:5173")
+    return ()
+
+
 @dataclass(frozen=True)
 class Settings:
     environment: str = os.getenv("ENVIRONMENT", "development")
-    database_url: str = os.getenv(
-        "DB_URL",
-        "postgresql://ecotrees:ecotrees-local-only@localhost:5432/ecotrees",
-    )
-    migration_database_url: str = os.getenv(
-        "DB_MIGRATION_URL",
-        "postgresql://ecotrees_admin:ecotrees-admin-local-only@localhost:5432/ecotrees",
-    )
+    database_url: str = os.getenv("DB_URL", "")
+    migration_database_url: str = os.getenv("DB_MIGRATION_URL", "")
     jwt_secret: str = os.getenv("JWT_SECRET", "development-only-change-me")
     jwt_expiry_minutes: int = int(os.getenv("JWT_EXPIRY_MINUTES", "60"))
     jwt_cookie_name: str = os.getenv("JWT_COOKIE_NAME", "ecotrees_session")
     cors_origins: tuple[str, ...] = _csv(
-        os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
+        os.getenv(
+            "CORS_ORIGINS",
+            ",".join(_default_cors_origins(os.getenv("ENVIRONMENT", "development"))),
+        )
     )
     ingest_token: str = os.getenv("INGEST_TOKEN", "")
     bank_api_base: str = os.getenv("BANK_API_BASE", "http://localhost:9000/v1")
@@ -63,7 +66,9 @@ class Settings:
 
 settings = Settings()
 
-if settings.environment.lower() not in {"development", "local", "test"}:
+if settings.environment.lower() in {"production", "prod", "staging", "stage"}:
+    if not settings.database_url:
+        raise RuntimeError("DB_URL is required outside local development.")
     if len(settings.jwt_secret.encode()) < 32 or settings.jwt_secret == "development-only-change-me":
         raise RuntimeError("JWT_SECRET must be at least 32 bytes outside local development.")
     if not settings.ingest_token:

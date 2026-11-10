@@ -232,7 +232,7 @@ def list_plots_for_ingest(
     }
 
 
-@router.post("/internal/ndvi", status_code=201)
+@router.post("/internal/ndvi", status_code=200)
 def ingest_ndvi(
     payload: NdviObservationInput,
     x_ingest_token: str | None = Header(default=None, alias="X-Ingest-Token"),

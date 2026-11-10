@@ -45,11 +45,18 @@ def assess_monitoring(
     observations: Iterable[Observation],
     parameters: AssessmentParameters = AssessmentParameters(),
 ) -> Assessment:
-    if parameters.rolling_n < 1:
-        raise ValueError("rolling_n must be at least one.")
+    if parameters.min_observations < 1:
+        raise ValueError("min_observations must be at least one.")
+    if parameters.rolling_n < 1 or parameters.reference_window_days < 1:
+        raise ValueError("rolling_n and reference_window_days must be at least one.")
     if parameters.freeze_consecutive < 1 or parameters.recover_consecutive < 1:
         raise ValueError("Consecutive-observation thresholds must be at least one.")
-    if parameters.freeze_drop < parameters.watch_drop:
+    if (
+        not math.isfinite(parameters.watch_drop)
+        or not math.isfinite(parameters.freeze_drop)
+        or parameters.watch_drop < 0
+        or parameters.freeze_drop < parameters.watch_drop
+    ):
         raise ValueError("freeze_drop must be greater than or equal to watch_drop.")
 
     valid = sorted(

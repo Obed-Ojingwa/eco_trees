@@ -4,3 +4,10 @@ BACKEND-PHASES.md
 DEMO-AND-PITCH.md
 CARBON-ENGINE.md
 FRONTEND-PHASES.md
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.env
+backend/.env
