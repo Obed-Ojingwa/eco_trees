@@ -1,0 +1,5 @@
+CREATE ROLE ecotrees LOGIN PASSWORD 'ecotrees-local-only';
+GRANT CONNECT ON DATABASE ecotrees TO ecotrees;
+GRANT USAGE ON SCHEMA public TO ecotrees;
+ALTER DEFAULT PRIVILEGES FOR ROLE ecotrees_admin IN SCHEMA public
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ecotrees;

@@ -1,0 +1,29 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: ecotrees
+      POSTGRES_USER: ecotrees_admin
+      POSTGRES_PASSWORD: ecotrees-admin-local-only
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./app/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ecotrees -d ecotrees"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mock_bank:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["uvicorn", "app.integrations.mock_bank:app", "--host", "0.0.0.0", "--port", "9000"]
+    ports:
+      - "9000:9000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9000/healthz')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
