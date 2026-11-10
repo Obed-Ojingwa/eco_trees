@@ -6,13 +6,16 @@ import ProjectInspection from './auditor/ProjectInspection';
 import FarmProjects from './auditor/FarmProjects';
 import ReviewHistory from './auditor/ReviewHistory';
 import AuditorSettings from './auditor/AuditorSettings';
+import Login from './auth/Login';
+import Signup from './auth/Signup';
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Default route redirects to auditor overview */}
-        <Route path="/" element={<Navigate to="/auditor/overview" replace />} />
+        {/* Auth routes */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
 
         {/* Auditor Workspace with nested routes */}
         <Route path="/auditor" element={<AuditorLayout />}>
@@ -26,7 +29,8 @@ export default function App() {
           <Route path="settings" element={<AuditorSettings />} />
         </Route>
 
-        {/* Fallback for direct top-level paths */}
+        {/* Default route redirects to auditor overview */}
+        <Route path="/" element={<Navigate to="/auditor/overview" replace />} />
         <Route path="/overview" element={<Navigate to="/auditor/overview" replace />} />
         <Route path="*" element={<Navigate to="/auditor/overview" replace />} />
       </Routes>
