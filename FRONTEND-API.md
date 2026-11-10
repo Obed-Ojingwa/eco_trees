@@ -1,6 +1,6 @@
 # EcoTrees Backend API for Frontend
 
-This contract describes the backend implemented for phases B0–B3. The API prefix is `/api`. In production, the browser should call the same-origin web proxy; local Vite development may call `http://127.0.0.1:8000`.
+This contract describes the backend implemented for phases B0–B5. The API prefix is `/api`. In production, the browser should call the same-origin web proxy; local Vite development may call `http://127.0.0.1:8000`.
 
 All mutating `/api/*` requests must include `X-EcoTrees: 1`. JSON requests use `Content-Type: application/json`. Send browser requests with credentials enabled so the session cookie is included. The backend sets an `HttpOnly`, `SameSite=Lax` session cookie; it does not return a JWT for JavaScript to store.
 
@@ -249,6 +249,162 @@ Farmer (own plot), auditor, and admin access. Returns current `monitoring_state`
 
 ## Local development and implementation boundary
 
+## Carbon estimates, batches, and credits (B4–B5)
+
+Carbon tonnes are illustrative while the active parameter response reports
+`is_placeholder: true`; this status must remain visible in the UI. NDVI only
+corroborates survival/loss and does not produce tonnes. `PLACEHOLDER_PARAMS`
+is informational and does not block approval; every other estimate flag
+requires an explicit auditor override with a note before approval. A prototype
+credit serial is not a Verra, Gold Standard, or national-registry serial.
+Only the newest estimate per plot can be batched. If credits were issued after
+an estimate was calculated, rerun estimates before forming another batch.
+
+### Public carbon parameters
+
+#### `GET /api/carbon/parameters`
+
+Returns the active parameter version, placeholder status, satellite
+multipliers, and per-species assumptions. Fields that represent Decimal
+values are strings. Carbon tonnes and hectare values in estimate, batch, and
+auditor responses are also fixed-point strings, preserving their stored
+precision without JSON floating-point conversion.
+
+### Auditor plot review
+
+#### `POST /api/auditor/plots/{plot_id}/verification`
+
+Auditor-only. Moves a `submitted` or `flagged` plot to `verified` or `rejected`.
+This is the review path required before a verified plot can be estimated.
+
+```json
+{"decision": "verified", "note": "Planting and evidence reviewed."}
+```
+
+#### `PUT /api/auditor/plots/{plot_id}/survival-override`
+
+Auditor-only. Records an audited survival estimate; the note is required.
+
+```json
+{"survival": "0.82", "note": "Field review found 82% survival."}
+```
+
+### Estimates and batch formation
+
+#### `POST /api/admin/estimates/run`
+
+Admin-only. Writes a replayable snapshot for eligible planted plots. `plot_ids`
+is optional and `as_of` defaults to today.
+
+```json
+{"as_of": "2026-03-01", "plot_ids": ["plot-uuid"]}
+```
+
+Returns `count` and estimate `items`, including gross/net tonnes, incremental
+`issuable_t`, flags, and each estimate ID. Estimates with unverified plots
+calculate to zero.
+
+#### `GET /api/admin/estimates?plot_id={uuid}&limit=100`
+
+Admin-only, with optional plot filter. Returns persisted estimate snapshots.
+
+#### `POST /api/admin/batches`
+
+Admin-only; creates a forming batch from the newest unbatched estimate per
+eligible plot when `estimate_ids` is omitted. To select estimates explicitly:
+
+```json
+{"estimate_ids": ["estimate-uuid"]}
+```
+
+Only verified plots in `ok` or `watch` monitoring state with positive
+incremental tonnes can be included. An estimate can belong to only one batch,
+and a batch can contain at most one estimate per plot.
+
+#### `GET /api/admin/batches?limit=100`
+
+Admin-only. Lists batches and their status, tonnes, units, registry source, and
+timestamps.
+
+#### `POST /api/admin/batches/{batch_id}/submit`
+
+Admin-only. Submits a forming batch once its total reaches the configured
+minimum and contains at least one full tonne. Units are floored to whole
+credits. Per-plot attribution is apportioned to four decimals and sums exactly
+to the issued unit count without exceeding any plot claim.
+
+### Auditor batch review
+
+#### `GET /api/auditor/batches?limit=100`
+
+Auditor-only queue of submitted batches, including plot and blocking-flag
+counts.
+
+#### `GET /api/auditor/batches/{batch_id}`
+
+Auditor-only detail with plot geometry, estimate inputs, tonnes, flags, and any
+recorded review.
+
+#### `POST /api/auditor/batches/{batch_id}/decision`
+
+Auditor-only. The note is required. Approval requires an override entry for
+each plot with blocking flags; each entry must cover exactly that plot's
+blocking flags and include a note. Placeholder parameters never require an
+override.
+
+```json
+{
+  "decision": "approved",
+  "note": "Reviewed source evidence and estimates.",
+  "overrides": [
+    {
+      "plot_id": "plot-uuid",
+      "flags": ["FEW_VALID_PIXELS"],
+      "note": "Field photos corroborate the planting."
+    }
+  ]
+}
+```
+
+An approval stores the canonical package, SHA-256 hash, signing-key ID, and
+HMAC-SHA256 signature, then issues credits through the configured registry
+adapter. Repeating the same decision is idempotent. A rejected or approved
+review is final.
+
+### Credit listing and lookup
+
+#### `POST /api/admin/batches/{batch_id}/listing`
+
+Admin-only. Lists every issued credit in an issued batch at the given
+`price_per_tonne_kobo`:
+
+```json
+{"price_per_tonne_kobo": 250000}
+```
+
+#### `GET /api/public/credits?limit=100&offset=0`
+
+Lists publicly available listed, sold, and retired serials.
+
+#### `GET /api/public/credits/{serial}`
+
+Returns the serial, batch/vintage, registry source and reference, current
+status, listing price (if any), and retirement details (if any).
+
+Common workflow errors include `PLOT_NOT_REVIEWABLE`, `PLOT_NOT_VERIFIED`,
+`ESTIMATES_NOT_BATCHABLE`, `BATCH_BELOW_MINIMUM`,
+`BLOCKING_FLAGS_REQUIRE_OVERRIDE`, and `BATCH_NOT_ISSUED`. All endpoints use
+the common error envelope above. Mutating requests still require
+`X-EcoTrees: 1` and browser credentials.
+
+The internal mock registry produces prototype `EC-NG-...` serials. The
+Xtradot adapter remains disabled until its sandbox request/response schemas
+are verified; setting the backend to Xtradot does not enable an unverified
+integration.
+
+Credit retirement and buyer certificates are not exposed yet: ownership and
+purchase flows depend on the later B6 marketplace/order implementation.
+
 1. From `backend/`, copy `.env.example` to `.env` and set distinct local `DB_ADMIN_PASSWORD` and `DB_APP_PASSWORD` values.
 2. With Docker Compose installed, from `backend/` run `docker compose up -d db mock_bank`.
 3. Create and activate a Python 3.12 virtual environment, then install dependencies with `pip install -r requirements.txt`.
@@ -258,6 +414,7 @@ Farmer (own plot), auditor, and admin access. Returns current `monitoring_state`
 7. To seed synthetic non-farmer roles, set `DEMO_USERS_JSON` to a JSON array and run `python -m app.db.seed_users`. Farmer accounts register through the API.
 8. For Sentinel-2 ingestion, install `requirements-ndvi.txt` on an internet-connected machine, export the same API URL and ingest token, then run `python -m app.tools.ndvi_ingest --dry-run` before uploading observations.
 
-The Kubernetes manifests are in `backend/k8s/`. Create secrets outside source control: `ecotrees-db-admin` (`DB_ADMIN_PASSWORD`, `DB_APP_PASSWORD`), `ecotrees-secrets` (`DB_URL`, `JWT_SECRET`, `INGEST_TOKEN`), and `ecotrees-migration` (`DB_MIGRATION_URL`). The pre-provisioned `huawei-gateway` secret supplies `GATEWAY_KEY`. Build the API image for `linux/amd64`, apply `db.yaml`, wait for the database, run `migrate-job.yaml`, then apply `api.yaml`. The API service is internal; the frontend's public service proxies requests to it.
+The Kubernetes manifests are in `backend/k8s/`. Create secrets outside source control: `ecotrees-db-admin` (`DB_ADMIN_PASSWORD`, `DB_APP_PASSWORD`), `ecotrees-secrets` (`DB_URL`, `JWT_SECRET`, `INGEST_TOKEN`, `CARBON_SIGNING_KEY`), and `ecotrees-migration` (`DB_MIGRATION_URL`). Use a random signing key of at least 32 bytes; `CARBON_SIGNING_KEY_ID` is configured in `api.yaml`. The pre-provisioned `huawei-gateway` secret supplies `GATEWAY_KEY`. Build the API image for `linux/amd64`, apply `db.yaml`, wait for the database, run `migrate-job.yaml`, then apply `api.yaml`. The API service is internal; the frontend's public service proxies requests to it.
 
-`GET /api/farmer/home`, account setup, carbon estimates, batches, marketplace, payments, and payouts belong to later backend phases and are not implemented by this B0–B3 contract.
+`GET /api/farmer/home`, marketplace ordering, payments, and payouts remain
+later-phase work and are not implemented by this B0–B5 contract.

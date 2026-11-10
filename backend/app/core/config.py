@@ -57,6 +57,15 @@ class Settings:
         os.getenv("MONITORING_MIN_VALID_PIXELS", "1")
     )
     existing_forest_ndvi: float = float(os.getenv("EXISTING_FOREST_NDVI", "0.7"))
+    carbon_min_valid_pixels: int = int(os.getenv("CARBON_MIN_VALID_PIXELS", "5"))
+    carbon_batch_min_tonnes: str = os.getenv("CARBON_BATCH_MIN_TONNES", "1")
+    carbon_param_version: str = os.getenv("CARBON_PARAM_VERSION", "illustrative-v1")
+    carbon_signing_key: str = os.getenv("CARBON_SIGNING_KEY", "")
+    carbon_signing_key_id: str = os.getenv("CARBON_SIGNING_KEY_ID", "local-placeholder")
+    registry_backend: str = os.getenv("REGISTRY_BACKEND", "mock").lower()
+    registry_xtradot_enabled: bool = (
+        os.getenv("REGISTRY_XTRADOT_ENABLED", "false").strip().lower() == "true"
+    )
     migration_dir: Path = Path(__file__).resolve().parents[1] / "db" / "migrations"
 
     @property
@@ -73,3 +82,9 @@ if settings.environment.lower() in {"production", "prod", "staging", "stage"}:
         raise RuntimeError("JWT_SECRET must be at least 32 bytes outside local development.")
     if not settings.ingest_token:
         raise RuntimeError("INGEST_TOKEN is required outside local development.")
+    if not settings.carbon_signing_key:
+        raise RuntimeError("CARBON_SIGNING_KEY is required outside local development.")
+    if len(settings.carbon_signing_key.encode()) < 32:
+        raise RuntimeError("CARBON_SIGNING_KEY must be at least 32 bytes outside local development.")
+    if settings.registry_backend not in {"mock", "xtradot"}:
+        raise RuntimeError("REGISTRY_BACKEND must be 'mock' or 'xtradot'.")

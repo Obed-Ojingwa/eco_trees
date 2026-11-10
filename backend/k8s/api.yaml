@@ -41,6 +41,17 @@ spec:
                 secretKeyRef:
                   name: ecotrees-secrets
                   key: INGEST_TOKEN
+            - name: CARBON_SIGNING_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ecotrees-secrets
+                  key: CARBON_SIGNING_KEY
+            - name: CARBON_SIGNING_KEY_ID
+              value: ecotrees-hmac-v1
+            - name: REGISTRY_BACKEND
+              value: mock
+            - name: REGISTRY_XTRADOT_ENABLED
+              value: "false"
             - name: BANK_API_BASE
               value: http://bank-api.ingress-apisix.svc.cluster.local/v1
             - name: BANK_RPM_BUDGET

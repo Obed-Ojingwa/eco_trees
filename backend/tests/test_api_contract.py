@@ -38,6 +38,17 @@ def test_validation_errors_use_the_api_error_envelope() -> None:
     assert response.json()["error"]["details"]["fields"]
 
 
+def test_carbon_phase_routes_are_registered() -> None:
+    paths = app.openapi()["paths"]
+
+    assert "/api/carbon/parameters" in paths
+    assert "/api/admin/estimates/run" in paths
+    assert "/api/admin/batches/{batch_id}/submit" in paths
+    assert "/api/auditor/batches/{batch_id}/decision" in paths
+    assert "/api/auditor/plots/{plot_id}/verification" in paths
+    assert "/api/public/credits/{serial}" in paths
+
+
 def test_mock_bank_rejects_missing_api_key(monkeypatch) -> None:
     monkeypatch.setenv("GATEWAY_KEY", "local-test-key")
 

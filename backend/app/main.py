@@ -20,6 +20,11 @@ from app.modules.auth.schemas import ProfileUpdate
 from app.modules.monitoring.router import router as monitoring_router
 from app.modules.plots.router import router as plots_router
 from app.modules.notifications.router import router as notifications_router
+from app.modules.carbon.batch_router import router as carbon_batch_router
+from app.modules.carbon.credits_router import router as carbon_credits_router
+from app.modules.carbon.estimate_router import router as carbon_estimate_router
+from app.modules.carbon.plot_review_router import router as plot_review_router
+from app.modules.carbon.review_router import router as carbon_review_router
 
 
 logger = logging.getLogger(__name__)
@@ -233,3 +238,8 @@ app.include_router(auth_router)
 app.include_router(plots_router)
 app.include_router(monitoring_router)
 app.include_router(notifications_router)
+app.include_router(carbon_estimate_router)
+app.include_router(carbon_batch_router)
+app.include_router(plot_review_router)
+app.include_router(carbon_review_router)
+app.include_router(carbon_credits_router)
