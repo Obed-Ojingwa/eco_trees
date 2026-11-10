@@ -1,0 +1,8 @@
+pystac-client==0.8.6
+planetary-computer==1.0.0
+stackstac==0.5.1
+numpy==2.2.3
+shapely==2.0.7
+rasterio==1.4.3
+pyproj==3.7.1
+dask[array]==2025.2.0
