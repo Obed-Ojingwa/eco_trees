@@ -8,6 +8,12 @@ import ReviewHistory from './auditor/ReviewHistory';
 import AuditorSettings from './auditor/AuditorSettings';
 import Login from './auth/Login';
 import Signup from './auth/Signup';
+import BuyerLayout from './buyer/BuyerLayout';
+import ExploreProjects from './buyer/ExploreProjects';
+import ProjectDetail from './buyer/ProjectDetail';
+import PurchaseCheckout from './buyer/PurchaseCheckout';
+import MyPortfolio from './buyer/MyPortfolio';
+import HowItWorks from './buyer/HowItWorks';
 
 export default function App() {
   return (
@@ -16,6 +22,16 @@ export default function App() {
         {/* Auth routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
+
+        {/* Buyer / Marketplace routes */}
+        <Route path="/buyer" element={<BuyerLayout />}>
+          <Route index element={<Navigate to="explore" replace />} />
+          <Route path="explore" element={<ExploreProjects />} />
+          <Route path="project/:id" element={<ProjectDetail />} />
+          <Route path="checkout/:id" element={<PurchaseCheckout />} />
+          <Route path="portfolio" element={<MyPortfolio />} />
+          <Route path="how-it-works" element={<HowItWorks />} />
+        </Route>
 
         {/* Auditor Workspace with nested routes */}
         <Route path="/auditor" element={<AuditorLayout />}>
@@ -29,7 +45,10 @@ export default function App() {
           <Route path="settings" element={<AuditorSettings />} />
         </Route>
 
-        {/* Default route redirects to auditor overview */}
+        {/* Aliases & defaults */}
+        <Route path="/explore" element={<Navigate to="/buyer/explore" replace />} />
+        <Route path="/portfolio" element={<Navigate to="/buyer/portfolio" replace />} />
+        <Route path="/marketplace" element={<Navigate to="/buyer/explore" replace />} />
         <Route path="/" element={<Navigate to="/auditor/overview" replace />} />
         <Route path="/overview" element={<Navigate to="/auditor/overview" replace />} />
         <Route path="*" element={<Navigate to="/auditor/overview" replace />} />
