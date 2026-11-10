@@ -402,8 +402,116 @@ Xtradot adapter remains disabled until its sandbox request/response schemas
 are verified; setting the backend to Xtradot does not enable an unverified
 integration.
 
-Credit retirement and buyer certificates are not exposed yet: ownership and
-purchase flows depend on the later B6 marketplace/order implementation.
+## Marketplace, orders, checkout, and retirement (B6)
+
+#### `GET /api/marketplace/credits`
+
+Lists available `listed` credits with serial, registry source, batch/vintage,
+and `price_per_tonne_kobo`.
+
+#### `POST /api/orders`
+
+Buyer-only. Select one or more listed serials. Send a unique
+`Idempotency-Key` header (8–128 characters); reusing the key with a different
+selection returns `409 IDEMPOTENCY_KEY_REUSED`. The server reserves all
+selected credits atomically or reserves none.
+
+```json
+{"credit_serials": ["EC-NG-2026-000001-000001"]}
+```
+
+The order response includes the itemized credits and fixed kobo amounts:
+`subtotal_kobo`, `buyer_fee_kobo`, and `total_kobo`. The optional buyer fee is
+configured by `CHECKOUT_FEE_BPS`. Reservations expire after
+`ORDER_EXPIRY_MINUTES` unless verified payment has completed.
+
+#### `POST /api/orders/{order_id}/checkout`
+
+Buyer-only. Starts a hosted checkout once and returns `payment_url` and
+`payment_reference`. The server never retries a checkout POST after an
+ambiguous response; use the verify endpoint to reconcile it.
+
+#### `GET /api/payments/{reference}/verify`
+
+Buyer-only. Queries the bank and confirms payment only when the returned
+reference, `paid` status, and exact kobo amount match the order. Repeated
+verification is idempotent. Partial, overpaid, late, or mismatched collections
+are recorded in the suspense ledger and do not transfer credit ownership.
+
+#### `GET /api/orders` and `GET /api/orders/{order_id}`
+
+Buyer-only order history/detail. A buyer can only see their own orders.
+
+#### `POST /hooks/forge`
+
+Server-to-server webhook receiver. Verifies
+`x-forge-signature = HMAC-SHA256(secret, timestamp + "." + raw_body)` and
+`x-forge-timestamp` within five minutes before de-duplicating by `event_id`
+and queueing supported payment/transfer events. Workers re-query the bank;
+webhook contents alone never grant payment or payout value.
+
+#### Buyer-owned credits and retirement
+
+- `GET /api/buyer/credits` lists credits that belong to the authenticated buyer.
+- `POST /api/buyer/credits/retire` retires owned, unretired credits from one
+  batch/registry. Requires `Idempotency-Key` and
+  `{"serials": ["..."], "beneficiary": "..."}`.
+- `GET /api/buyer/retirements/{reference}/certificate` returns the certificate
+  for the authenticated buyer's retirement, including serials, registry
+  source, batch and auditor package hash.
+
+## Escrow, ledger, payouts, and dashboard (B7–B8)
+
+The ledger stores integer kobo debit/credit entries and rejects unbalanced
+transactions both in the service and with a deferred database constraint.
+Payment creates a held escrow liability; a worker releases it to per-farmer
+payables and records the applicable platform fee. Payout shares use attributed
+batch tonnes and largest-remainder allocation to whole naira, preserving the
+exact distributable total.
+
+- `PUT /api/farmer/payout-account` submits bank code/account number for name
+  enquiry. The response exposes only a masked number and the resolved name.
+  The account number is encrypted at rest using PostgreSQL `pgcrypto`.
+- `GET /api/farmer/payout-account` returns the saved masked account/name and
+  confirmation state.
+- `POST /api/farmer/payout-account/confirm` confirms the recently resolved
+  name exactly before payouts are eligible.
+- `GET /api/admin/payouts` lists payout state and masked account details.
+- `POST /api/admin/payouts/release` releases paid orders held in escrow.
+- `POST /api/admin/payouts/{payout_id}/submit` is an admin/manual test path;
+  `X-Test-Outcome` only has effect with the mock bank.
+- `POST /api/admin/payouts/{payout_id}/requery` queries an existing transfer.
+  `unknown` and `processing` transfers are only requeried, never POSTed again.
+- `POST /api/admin/drills/payments/{order_id}` exercises mock outcomes
+  (`paid`, `partial`, `overpaid`, `failed`, `pending`, `timeout`).
+- `POST /api/admin/bank-reset` resets the mock bank only when no active order,
+  held escrow, or in-flight payout remains, then re-registers the webhook.
+- `GET /api/farmer/home` returns points/level, new notifications since
+  `POST /api/farmer/seen`, plot/greenness summary, estimate-only potential
+  value, successful payouts, and suggested next actions. Level thresholds are
+  configured with `FARMER_LEVEL_THRESHOLDS` (`points:label` pairs).
+- `GET /api/public/impact` returns aggregate, non-identifying impact counters.
+- `GET /api/admin/batches/{batch_id}/impact-pack` exports geometries,
+  attribution, monitoring history, auditor package hash, and payout totals.
+
+The asynchronous worker is `python -m app.workers.run`; it processes webhook
+events, expires orders only after verification, releases escrow, submits
+eligible payouts once, polls unknown/processing payouts, and ensures the
+webhook registration.
+
+## Bank integration boundary
+
+The checked-in mock bank provides deterministic local checkout, verification,
+name-enquiry, treasury-balance, transfer, and reset routes for backend tests.
+Its state is in-memory and is for development/demo use only. The live
+Xtradot payment, transfer, identity/BVN, and webhook schemas are not present
+in the repository. Therefore `PAYMENT_BACKEND=xtradot` fails finance calls
+with `BANK_SCHEMA_UNCONFIRMED`; the code deliberately does not guess live
+request/response formats or send money. BVN verification remains blocked until
+the identity schema is confirmed. Production must explicitly configure
+`PAYMENT_BACKEND`, `FORGE_WEBHOOK_SECRET`, `PAYOUT_ENCRYPTION_KEY`, and
+`TREASURY_ACCOUNT`; use a mock backend in production only for an explicitly
+approved demo with `ALLOW_MOCK_PAYMENTS=true`.
 
 1. From `backend/`, copy `.env.example` to `.env` and set distinct local `DB_ADMIN_PASSWORD` and `DB_APP_PASSWORD` values.
 2. With Docker Compose installed, from `backend/` run `docker compose up -d db mock_bank`.
@@ -414,7 +522,9 @@ purchase flows depend on the later B6 marketplace/order implementation.
 7. To seed synthetic non-farmer roles, set `DEMO_USERS_JSON` to a JSON array and run `python -m app.db.seed_users`. Farmer accounts register through the API.
 8. For Sentinel-2 ingestion, install `requirements-ndvi.txt` on an internet-connected machine, export the same API URL and ingest token, then run `python -m app.tools.ndvi_ingest --dry-run` before uploading observations.
 
-The Kubernetes manifests are in `backend/k8s/`. Create secrets outside source control: `ecotrees-db-admin` (`DB_ADMIN_PASSWORD`, `DB_APP_PASSWORD`), `ecotrees-secrets` (`DB_URL`, `JWT_SECRET`, `INGEST_TOKEN`, `CARBON_SIGNING_KEY`), and `ecotrees-migration` (`DB_MIGRATION_URL`). Use a random signing key of at least 32 bytes; `CARBON_SIGNING_KEY_ID` is configured in `api.yaml`. The pre-provisioned `huawei-gateway` secret supplies `GATEWAY_KEY`. Build the API image for `linux/amd64`, apply `db.yaml`, wait for the database, run `migrate-job.yaml`, then apply `api.yaml`. The API service is internal; the frontend's public service proxies requests to it.
+The Kubernetes manifests are in `backend/k8s/`. Create secrets outside source control: `ecotrees-db-admin` (`DB_ADMIN_PASSWORD`, `DB_APP_PASSWORD`), `ecotrees-secrets` (`DB_URL`, `JWT_SECRET`, `INGEST_TOKEN`, `CARBON_SIGNING_KEY`, `FORGE_WEBHOOK_SECRET`, `PAYOUT_ENCRYPTION_KEY`, `TREASURY_ACCOUNT`), and `ecotrees-migration` (`DB_MIGRATION_URL`). Use separate random signing/encryption keys of at least 32 bytes; `CARBON_SIGNING_KEY_ID` is configured in the manifests. The pre-provisioned `huawei-gateway` secret supplies `GATEWAY_KEY`. Build the API image for `linux/amd64`, apply `db.yaml`, wait for the database, run `migrate-job.yaml`, then apply `api.yaml` and `worker.yaml`. The API service is internal; the frontend's public service proxies requests to it.
 
-`GET /api/farmer/home`, marketplace ordering, payments, and payouts remain
-later-phase work and are not implemented by this B0–B5 contract.
+For local development, set `PAYMENT_BACKEND=mock`, `ALLOW_MOCK_PAYMENTS=true`,
+`GATEWAY_KEY`, and the local webhook/encryption keys in `.env`. Run the mock
+bank and API with the same `GATEWAY_KEY`. The mock bank is not a payment
+processor or a source of production settlement evidence.

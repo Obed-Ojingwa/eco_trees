@@ -21,6 +21,8 @@ services:
       context: .
       dockerfile: Dockerfile
     command: ["uvicorn", "app.integrations.mock_bank:app", "--host", "0.0.0.0", "--port", "9000"]
+    environment:
+      GATEWAY_KEY: ${GATEWAY_KEY:-local-mock-key}
     ports:
       - "9000:9000"
     healthcheck:
