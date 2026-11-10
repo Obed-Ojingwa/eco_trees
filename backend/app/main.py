@@ -25,6 +25,10 @@ from app.modules.carbon.credits_router import router as carbon_credits_router
 from app.modules.carbon.estimate_router import router as carbon_estimate_router
 from app.modules.carbon.plot_review_router import router as plot_review_router
 from app.modules.carbon.review_router import router as carbon_review_router
+from app.modules.payments import router as payments_router
+from app.modules.payouts import router as payouts_router
+from app.modules.dashboard import router as dashboard_router
+from app.modules.marketplace import router as marketplace_router
 
 
 logger = logging.getLogger(__name__)
@@ -54,7 +58,14 @@ app.add_middleware(
     allow_origins=list(settings.cors_origins),
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "X-EcoTrees", "X-Ingest-Token", "X-Request-ID"],
+    allow_headers=[
+        "Content-Type",
+        "Idempotency-Key",
+        "X-EcoTrees",
+        "X-Ingest-Token",
+        "X-Request-ID",
+        "X-Test-Outcome",
+    ],
     expose_headers=["X-Request-ID"],
 )
 
@@ -238,6 +249,15 @@ app.include_router(auth_router)
 app.include_router(plots_router)
 app.include_router(monitoring_router)
 app.include_router(notifications_router)
+app.include_router(carbon_batch_router)
+app.include_router(carbon_credits_router)
+app.include_router(carbon_estimate_router)
+app.include_router(plot_review_router)
+app.include_router(carbon_review_router)
+app.include_router(payments_router)
+app.include_router(payouts_router)
+app.include_router(dashboard_router)
+app.include_router(marketplace_router)
 app.include_router(carbon_estimate_router)
 app.include_router(carbon_batch_router)
 app.include_router(plot_review_router)

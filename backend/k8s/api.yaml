@@ -48,6 +48,33 @@ spec:
                   key: CARBON_SIGNING_KEY
             - name: CARBON_SIGNING_KEY_ID
               value: ecotrees-hmac-v1
+            - name: FORGE_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ecotrees-secrets
+                  key: FORGE_WEBHOOK_SECRET
+            - name: PAYOUT_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ecotrees-secrets
+                  key: PAYOUT_ENCRYPTION_KEY
+            - name: TREASURY_ACCOUNT
+              valueFrom:
+                secretKeyRef:
+                  name: ecotrees-secrets
+                  key: TREASURY_ACCOUNT
+            - name: PAYMENT_BACKEND
+              value: xtradot
+            - name: PUBLIC_BASE_URL
+              value: https://team09.xtradot.co
+            - name: WEBHOOK_URL
+              value: http://app.team09.svc.cluster.local/hooks/forge
+            - name: CHECKOUT_FEE_BPS
+              value: "0"
+            - name: PAYOUT_FEE_BPS
+              value: "0"
+            - name: ORDER_EXPIRY_MINUTES
+              value: "30"
             - name: REGISTRY_BACKEND
               value: mock
             - name: REGISTRY_XTRADOT_ENABLED

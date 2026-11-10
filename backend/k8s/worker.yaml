@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: finance-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: finance-worker
+  template:
+    metadata:
+      labels:
+        app: finance-worker
+    spec:
+      containers:
+        - name: finance-worker
+          image: <registry>/ecotrees-api:<git-sha>
+          command:
+            - python
+            - -m
+            - app.workers.run
+          env:
+            - name: ENVIRONMENT
+              value: production
+            - name: DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ecotrees-secrets
+                  key: DB_URL
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ecotrees-secrets
+                  key: JWT_SECRET
+            - name: INGEST_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: ecotrees-secrets
+                  key: INGEST_TOKEN
+            - name: CARBON_SIGNING_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ecotrees-secrets
+                  key: CARBON_SIGNING_KEY
+            - name: CARBON_SIGNING_KEY_ID
+              value: ecotrees-hmac-v1
+            - name: FORGE_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ecotrees-secrets
+                  key: FORGE_WEBHOOK_SECRET
+            - name: PAYOUT_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ecotrees-secrets
+                  key: PAYOUT_ENCRYPTION_KEY
+            - name: TREASURY_ACCOUNT
+              valueFrom:
+                secretKeyRef:
+                  name: ecotrees-secrets
+                  key: TREASURY_ACCOUNT
+            - name: PAYMENT_BACKEND
+              value: xtradot
+            - name: PUBLIC_BASE_URL
+              value: https://team09.xtradot.co
+            - name: WEBHOOK_URL
+              value: http://app.team09.svc.cluster.local/hooks/forge
+            - name: BANK_API_BASE
+              value: http://bank-api.ingress-apisix.svc.cluster.local/v1
+            - name: BANK_RPM_BUDGET
+              value: "45"
+            - name: GATEWAY_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: huawei-gateway
+                  key: GATEWAY_KEY
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi

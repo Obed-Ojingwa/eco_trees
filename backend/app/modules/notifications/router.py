@@ -89,7 +89,7 @@ def mark_notifications_seen(
     user: dict = Depends(require_roles("farmer")),
 ) -> dict:
     notification_ids = payload.notification_ids if payload else []
-    with connection() as conn:
+    with connection() as conn, conn.transaction():
         if notification_ids:
             result = conn.execute(
                 """
@@ -108,4 +108,12 @@ def mark_notifications_seen(
                 """,
                 (user["id"],),
             )
+        conn.execute(
+            """
+            INSERT INTO farmer_dashboard_visits (farmer_id, last_seen_at)
+            VALUES (%s, now())
+            ON CONFLICT (farmer_id) DO UPDATE SET last_seen_at = EXCLUDED.last_seen_at
+            """,
+            (user["id"],),
+        )
     return {"marked_seen": result.rowcount}

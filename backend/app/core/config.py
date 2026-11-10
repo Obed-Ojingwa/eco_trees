@@ -13,6 +13,29 @@ def _default_cors_origins(environment: str) -> tuple[str, ...]:
     return ()
 
 
+def _level_thresholds(value: str) -> tuple[tuple[int, str], ...]:
+    try:
+        thresholds = tuple(
+            (int(threshold.strip()), label.strip())
+            for entry in value.split(",")
+            for threshold, label in [entry.split(":", 1)]
+        )
+    except (ValueError, TypeError) as exc:
+        raise RuntimeError(
+            "FARMER_LEVEL_THRESHOLDS must use 'points:label' comma-separated values."
+        ) from exc
+    if (
+        not thresholds
+        or thresholds[0][0] != 0
+        or any(points < 0 or not label for points, label in thresholds)
+        or any(left[0] >= right[0] for left, right in zip(thresholds, thresholds[1:]))
+    ):
+        raise RuntimeError(
+            "FARMER_LEVEL_THRESHOLDS must start at zero and use non-empty labels with increasing points."
+        )
+    return thresholds
+
+
 @dataclass(frozen=True)
 class Settings:
     environment: str = os.getenv("ENVIRONMENT", "development")
@@ -32,6 +55,27 @@ class Settings:
     gateway_key: str = os.getenv("GATEWAY_KEY", "")
     bank_rpm_budget: int = int(os.getenv("BANK_RPM_BUDGET", "45"))
     bank_get_retries: int = int(os.getenv("BANK_GET_RETRIES", "3"))
+    payment_backend: str = os.getenv("PAYMENT_BACKEND", "mock").lower()
+    allow_mock_payments: bool = (
+        os.getenv("ALLOW_MOCK_PAYMENTS", "false").strip().lower() == "true"
+    )
+    forge_webhook_secret: str = os.getenv("FORGE_WEBHOOK_SECRET", "")
+    payout_encryption_key: str = os.getenv("PAYOUT_ENCRYPTION_KEY", "")
+    public_base_url: str = os.getenv("PUBLIC_BASE_URL", "http://127.0.0.1:8000")
+    webhook_url: str = os.getenv(
+        "WEBHOOK_URL",
+        "http://127.0.0.1:8000/hooks/forge",
+    )
+    treasury_account: str = os.getenv("TREASURY_ACCOUNT", "")
+    checkout_fee_bps: int = int(os.getenv("CHECKOUT_FEE_BPS", "0"))
+    payout_fee_bps: int = int(os.getenv("PAYOUT_FEE_BPS", "0"))
+    order_expiry_minutes: int = int(os.getenv("ORDER_EXPIRY_MINUTES", "30"))
+    farmer_level_thresholds: tuple[tuple[int, str], ...] = _level_thresholds(
+        os.getenv(
+            "FARMER_LEVEL_THRESHOLDS",
+            "0:Seedling,500:Sapling,1500:Canopy,5000:Forest Guardian",
+        )
+    )
     max_photo_bytes: int = int(os.getenv("MAX_PHOTO_BYTES", str(8 * 1024 * 1024)))
     photo_gps_tolerance_m: float = float(os.getenv("PHOTO_GPS_TOLERANCE_M", "50"))
     photo_accuracy_limit_m: float = float(os.getenv("PHOTO_ACCURACY_LIMIT_M", "50"))
@@ -88,3 +132,22 @@ if settings.environment.lower() in {"production", "prod", "staging", "stage"}:
         raise RuntimeError("CARBON_SIGNING_KEY must be at least 32 bytes outside local development.")
     if settings.registry_backend not in {"mock", "xtradot"}:
         raise RuntimeError("REGISTRY_BACKEND must be 'mock' or 'xtradot'.")
+    if not os.getenv("PAYMENT_BACKEND"):
+        raise RuntimeError("PAYMENT_BACKEND must be explicitly configured outside local development.")
+    if settings.payment_backend == "mock" and not settings.allow_mock_payments:
+        raise RuntimeError("Mock payments require ALLOW_MOCK_PAYMENTS=true outside local development.")
+    if settings.payment_backend not in {"mock", "xtradot"}:
+        raise RuntimeError("PAYMENT_BACKEND must be 'mock' or 'xtradot'.")
+    if not settings.forge_webhook_secret or len(settings.forge_webhook_secret.encode()) < 32:
+        raise RuntimeError("FORGE_WEBHOOK_SECRET must be at least 32 bytes outside local development.")
+    if len(settings.payout_encryption_key.encode()) < 32:
+        raise RuntimeError("PAYOUT_ENCRYPTION_KEY must be at least 32 bytes outside local development.")
+    if not settings.treasury_account:
+        raise RuntimeError("TREASURY_ACCOUNT is required outside local development.")
+
+if not 0 <= settings.checkout_fee_bps <= 10_000:
+    raise RuntimeError("CHECKOUT_FEE_BPS must be between 0 and 10000.")
+if not 0 <= settings.payout_fee_bps <= 10_000:
+    raise RuntimeError("PAYOUT_FEE_BPS must be between 0 and 10000.")
+if settings.order_expiry_minutes < 1:
+    raise RuntimeError("ORDER_EXPIRY_MINUTES must be positive.")

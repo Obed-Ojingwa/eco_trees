@@ -47,6 +47,15 @@ def test_carbon_phase_routes_are_registered() -> None:
     assert "/api/auditor/batches/{batch_id}/decision" in paths
     assert "/api/auditor/plots/{plot_id}/verification" in paths
     assert "/api/public/credits/{serial}" in paths
+    assert "/api/marketplace/credits" in paths
+    assert "/api/orders" in paths
+    assert "/api/orders/{order_id}/checkout" in paths
+    assert "/api/payments/{reference}/verify" in paths
+    assert "/hooks/forge" in paths
+    assert "/api/buyer/credits/retire" in paths
+    assert "/api/farmer/payout-account" in paths
+    assert "/api/farmer/home" in paths
+    assert "/api/public/impact" in paths
 
 
 def test_mock_bank_rejects_missing_api_key(monkeypatch) -> None:
