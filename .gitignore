@@ -15,3 +15,5 @@ backend/.env
 seed_demo.py
 backend/supabase
 backend/RENDER.md
+frontend/DEPLOYMENT.md
+DEPLOYMENT.md
