@@ -14,3 +14,4 @@ venv/
 backend/.env
 seed_demo.py
 backend/supabase
+backend/RENDER.md
