@@ -1,0 +1,94 @@
+services:
+  - type: web
+    name: ecotrees-api
+    runtime: docker
+    plan: 0.5c-512mb
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /healthz
+    autoDeployTrigger: commit
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DB_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: INGEST_TOKEN
+        sync: false
+      - key: CARBON_SIGNING_KEY
+        sync: false
+      - key: FORGE_WEBHOOK_SECRET
+        sync: false
+      - key: PAYOUT_ENCRYPTION_KEY
+        sync: false
+      - key: TREASURY_ACCOUNT
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: WEBHOOK_URL
+        sync: false
+      - key: CARBON_SIGNING_KEY_ID
+        value: ecotrees-render-v1
+      - key: PAYMENT_BACKEND
+        value: xtradot
+      - key: REGISTRY_BACKEND
+        value: mock
+      - key: REGISTRY_XTRADOT_ENABLED
+        value: "false"
+      - key: CHECKOUT_FEE_BPS
+        value: "0"
+      - key: PAYOUT_FEE_BPS
+        value: "0"
+      - key: ORDER_EXPIRY_MINUTES
+        value: "30"
+      - key: BANK_RPM_BUDGET
+        value: "45"
+
+  - type: worker
+    name: ecotrees-finance-worker
+    runtime: docker
+    plan: 0.5c-512mb
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    dockerCommand: python -m app.workers.run
+    autoDeployTrigger: commit
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DB_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: INGEST_TOKEN
+        sync: false
+      - key: CARBON_SIGNING_KEY
+        sync: false
+      - key: FORGE_WEBHOOK_SECRET
+        sync: false
+      - key: PAYOUT_ENCRYPTION_KEY
+        sync: false
+      - key: TREASURY_ACCOUNT
+        sync: false
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: WEBHOOK_URL
+        sync: false
+      - key: CARBON_SIGNING_KEY_ID
+        value: ecotrees-render-v1
+      - key: PAYMENT_BACKEND
+        value: xtradot
+      - key: REGISTRY_BACKEND
+        value: mock
+      - key: REGISTRY_XTRADOT_ENABLED
+        value: "false"
+      - key: CHECKOUT_FEE_BPS
+        value: "0"
+      - key: PAYOUT_FEE_BPS
+        value: "0"
+      - key: ORDER_EXPIRY_MINUTES
+        value: "30"
+      - key: BANK_RPM_BUDGET
+        value: "45"
