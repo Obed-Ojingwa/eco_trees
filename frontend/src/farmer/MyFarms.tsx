@@ -13,40 +13,42 @@ interface FarmItem {
 
 async function fetchMyFarms(): Promise<FarmItem[]> {
   try {
-    const res = await fetch('/api/plots');
+    const res = await fetch('/api/plots', { credentials: 'include' });
     if (!res.ok) throw new Error();
     const data = await res.json();
     if (Array.isArray(data.items) && data.items.length > 0) {
-      return data.items.map((p: Record<string, unknown>) => ({
-        id: String(p.id || 'ET-00124'),
-        name: String(p.farm || p.farmer_display_name || 'Farm'),
-        location: 'Abeokuta · Ogun State',
-        trees: Number(p.trees || 250),
-        area_ha: Number(p.area_ha || 2.5),
-        status: String(p.status || 'Under review'),
-      }));
+      return data.items.map((p: {
+        id: string;
+        farmer_display_name?: string;
+        area_ha?: number;
+        status?: string;
+        plantings?: { trees_planted?: number; species_code?: string }[];
+      }) => {
+        let treeCount = 0;
+        if (Array.isArray(p.plantings) && p.plantings.length > 0) {
+          treeCount = p.plantings.reduce((sum, pl) => sum + (pl.trees_planted || 0), 0);
+        }
+        const statusMap: Record<string, string> = {
+          draft: 'Draft',
+          submitted: 'Under review',
+          verified: 'Internally approved',
+          flagged: 'Changes requested',
+          rejected: 'Rejected',
+        };
+        const statusStr = statusMap[p.status || ''] || p.status || 'Under review';
+        return {
+          id: p.id,
+          name: p.farmer_display_name ? `${p.farmer_display_name}'s Farm` : 'Farm Project',
+          location: 'Ogun State',
+          trees: treeCount,
+          area_ha: Number(p.area_ha || 0),
+          status: statusStr,
+        };
+      });
     }
-    throw new Error();
+    return [];
   } catch {
-    // Exact fallback matching the UI specification
-    return [
-      {
-        id: 'ET-00124',
-        name: 'Green Valley Farm',
-        location: 'Abeokuta · Ogun State',
-        trees: 250,
-        area_ha: 2.5,
-        status: 'Under review',
-      },
-      {
-        id: 'ET-00118',
-        name: 'Sunrise Orchard',
-        location: 'Ijebu · Ogun State',
-        trees: 180,
-        area_ha: 1.8,
-        status: 'Internally approved',
-      },
-    ];
+    return [];
   }
 }
 
@@ -90,47 +92,64 @@ export default function MyFarms() {
 
         {/* Farm Cards */}
         <div className="space-y-3">
-          {farms.map((farm) => {
-            const isApproved = farm.status.toLowerCase().includes('approved');
-            return (
-              <div
-                key={farm.id}
-                onClick={() => navigate('/farmer/progress')}
-                className="bg-white rounded-2xl border border-gray-100 p-6 shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex items-center justify-between hover:border-gray-200 transition-colors cursor-pointer"
-              >
-                {/* Farm Name & Location */}
-                <div className="w-1/3">
-                  <h3 className="font-bold text-sm text-gray-900">{farm.name}</h3>
-                  <p className="text-xs text-gray-400 mt-1">{farm.location}</p>
-                </div>
+          {farms.length > 0 ? (
+            farms.map((farm) => {
+              const isApproved = farm.status.toLowerCase().includes('approved');
+              return (
+                <div
+                  key={farm.id}
+                  onClick={() => navigate('/farmer/progress')}
+                  className="bg-white rounded-2xl border border-gray-100 p-6 shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex items-center justify-between hover:border-gray-200 transition-colors cursor-pointer"
+                >
+                  {/* Farm Name & Location */}
+                  <div className="w-1/3">
+                    <h3 className="font-bold text-sm text-gray-900">{farm.name}</h3>
+                    <p className="text-xs text-gray-400 mt-1">{farm.location}</p>
+                  </div>
 
-                {/* Tree Inventory */}
-                <div className="w-1/3 text-center">
-                  <p className="text-xs text-gray-600">
-                    {farm.trees} trees · {farm.area_ha} ha
-                  </p>
-                </div>
+                  {/* Tree Inventory */}
+                  <div className="w-1/3 text-center">
+                    <p className="text-xs text-gray-600">
+                      {farm.trees} trees · {farm.area_ha} ha
+                    </p>
+                  </div>
 
-                {/* Status & View Link */}
-                <div className="w-1/3 flex items-center justify-end gap-5">
-                  <span
-                    className={`text-xs font-semibold px-3 py-1 rounded-full ${
-                      isApproved
-                        ? 'bg-[#eaf3ec] text-[#1b4332]'
-                        : 'bg-[#fef3c7] text-[#92400e]'
-                    }`}
-                  >
-                    {farm.status}
-                  </span>
+                  {/* Status & View Link */}
+                  <div className="w-1/3 flex items-center justify-end gap-5">
+                    <span
+                      className={`text-xs font-semibold px-3 py-1 rounded-full ${
+                        isApproved
+                          ? 'bg-[#eaf3ec] text-[#1b4332]'
+                          : 'bg-[#fef3c7] text-[#92400e]'
+                      }`}
+                    >
+                      {farm.status}
+                    </span>
 
-                  <span className="text-xs text-gray-700 font-medium flex items-center gap-1 hover:text-[#1b4332]">
-                    <span>View farm</span>
-                    <ChevronRight size={14} />
-                  </span>
+                    <span className="text-xs text-gray-700 font-medium flex items-center gap-1 hover:text-[#1b4332]">
+                      <span>View farm</span>
+                      <ChevronRight size={14} />
+                    </span>
+                  </div>
                 </div>
+              );
+            })
+          ) : (
+            <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-12 text-center space-y-3">
+              <h4 className="font-bold text-sm text-gray-900">No farms registered yet</h4>
+              <p className="text-xs text-gray-400 max-w-sm mx-auto">
+                You haven&apos;t registered any restoration plots under this account.
+              </p>
+              <div className="pt-2">
+                <button
+                  onClick={() => navigate('/farmer/register')}
+                  className="bg-[#1e4d3a] hover:bg-[#163c2c] text-white text-xs font-semibold px-5 py-2.5 rounded-xl transition-colors cursor-pointer"
+                >
+                  Register your first farm
+                </button>
               </div>
-            );
-          })}
+            </div>
+          )}
         </div>
       </div>
     </div>

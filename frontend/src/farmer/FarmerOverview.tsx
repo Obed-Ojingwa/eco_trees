@@ -17,45 +17,86 @@ interface RecentFarmProject {
 
 interface FarmerOverviewData {
   stats: FarmerOverviewStats;
-  recent_project: RecentFarmProject;
+  recent_project: RecentFarmProject | null;
 }
 
 async function fetchFarmerOverview(): Promise<FarmerOverviewData> {
   try {
-    const res = await fetch('/api/plots');
-    if (!res.ok) throw new Error();
-    const data = await res.json();
-    if (Array.isArray(data.items) && data.items.length > 0) {
-      const first = data.items[0];
-      return {
-        stats: {
-          farms: String(data.items.length).padStart(2, '0'),
-          trees: '250',
-          in_review: '01',
-        },
-        recent_project: {
-          id: String(first.id || 'ET-00124'),
-          name: String(first.farm || first.farmer_display_name || 'Green Valley Farm'),
-          status: 'Under review',
-          note: 'Your submission is with the EcoTrees review team.',
-        },
-      };
+    const [homeRes, plotsRes] = await Promise.all([
+      fetch('/api/farmer/home', { credentials: 'include' }).catch(() => null),
+      fetch('/api/plots', { credentials: 'include' }).catch(() => null),
+    ]);
+
+    let farmCount = 0;
+    let totalTrees = 0;
+    let inReviewCount = 0;
+    let recentProj: RecentFarmProject | null = null;
+
+    if (plotsRes && plotsRes.ok) {
+      const plotsData = await plotsRes.json();
+      if (Array.isArray(plotsData.items) && plotsData.items.length > 0) {
+        farmCount = plotsData.items.length;
+        inReviewCount = plotsData.items.filter(
+          (p: { status?: string }) => p.status === 'submitted' || p.status === 'draft'
+        ).length;
+
+        // Sum trees
+        let trees = 0;
+        plotsData.items.forEach((p: { plantings?: { trees_planted?: number }[] }) => {
+          if (Array.isArray(p.plantings)) {
+            p.plantings.forEach((pl) => {
+              trees += pl.trees_planted || 0;
+            });
+          }
+        });
+        totalTrees = trees;
+
+        const latest = plotsData.items[0];
+        const statusLabel =
+          latest.status === 'verified'
+            ? 'Internally approved'
+            : latest.status === 'submitted'
+            ? 'Under review'
+            : latest.status === 'draft'
+            ? 'Draft'
+            : latest.status;
+
+        recentProj = {
+          id: `ET-${latest.id.slice(0, 8)}`,
+          name: latest.farmer_display_name ? `${latest.farmer_display_name}'s Farm` : 'Farm Project',
+          status: statusLabel,
+          note:
+            latest.status === 'verified'
+              ? 'Your farm has been internally verified by EcoTrees.'
+              : 'Your submission is with the EcoTrees review team.',
+        };
+      }
     }
-    throw new Error();
-  } catch {
-    // Exact fallback matching the UI specification
+
+    if (homeRes && homeRes.ok) {
+      const homeData = await homeRes.json();
+      if (homeData.plot_summary) {
+        farmCount = homeData.plot_summary.total || farmCount;
+      }
+    }
+
     return {
       stats: {
-        farms: '02',
-        trees: '250',
-        in_review: '01',
+        farms: String(farmCount).padStart(2, '0'),
+        trees: String(totalTrees),
+        in_review: String(inReviewCount).padStart(2, '0'),
       },
-      recent_project: {
-        id: 'ET-00124',
-        name: 'Green Valley Farm',
-        status: 'Under review',
-        note: 'Your submission is with the EcoTrees review team.',
+      recent_project: recentProj,
+    };
+  } catch {
+    // Empty state fallback
+    return {
+      stats: {
+        farms: '00',
+        trees: '0',
+        in_review: '00',
       },
+      recent_project: null,
     };
   }
 }
@@ -180,25 +221,39 @@ export default function FarmerOverview() {
           Recent project
         </h3>
 
-        <div
-          onClick={() => navigate('/farmer/progress')}
-          className="bg-white rounded-2xl border border-gray-100 p-6 shadow-[0_1px_2px_rgba(0,0,0,0.02)] cursor-pointer hover:border-gray-200 transition-colors"
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <MapPin size={18} className="text-[#1b4332]" />
-              <span className="font-bold text-base text-gray-900">
-                {data.recent_project.name}
+        {data.recent_project ? (
+          <div
+            onClick={() => navigate('/farmer/progress')}
+            className="bg-white rounded-2xl border border-gray-100 p-6 shadow-[0_1px_2px_rgba(0,0,0,0.02)] cursor-pointer hover:border-gray-200 transition-colors"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <MapPin size={18} className="text-[#1b4332]" />
+                <span className="font-bold text-base text-gray-900">
+                  {data.recent_project.name}
+                </span>
+              </div>
+              <span className="bg-[#fef3c7] text-[#92400e] text-xs font-semibold px-3 py-1 rounded-full">
+                {data.recent_project.status}
               </span>
             </div>
-            <span className="bg-[#fef3c7] text-[#92400e] text-xs font-semibold px-3 py-1 rounded-full">
-              {data.recent_project.status}
-            </span>
+            <p className="text-xs text-gray-500 mt-3 pl-7">
+              {data.recent_project.note}
+            </p>
           </div>
-          <p className="text-xs text-gray-500 mt-3 pl-7">
-            {data.recent_project.note}
-          </p>
-        </div>
+        ) : (
+          <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center space-y-2">
+            <p className="text-xs text-gray-500">
+              No farm projects recorded yet.
+            </p>
+            <button
+              onClick={() => navigate('/farmer/register')}
+              className="text-xs font-semibold text-[#1b4332] hover:underline cursor-pointer"
+            >
+              Register your first farm &rarr;
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

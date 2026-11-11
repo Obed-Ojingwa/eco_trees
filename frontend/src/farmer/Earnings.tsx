@@ -1,16 +1,57 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Wallet } from 'lucide-react';
 
 interface EarningsData {
   potential_allocation: string;
   has_transactions: boolean;
+  bank_name?: string;
+  account_masked?: string;
 }
 
 export default function Earnings() {
-  const [data] = useState<EarningsData>({
+  const [data, setData] = useState<EarningsData>({
     potential_allocation: '₦0.00',
     has_transactions: false,
   });
+
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/farmer/home', { credentials: 'include' }).catch(() => null),
+      fetch('/api/farmer/payout-account', { credentials: 'include' }).catch(() => null),
+    ])
+      .then(async ([homeRes, payoutRes]) => {
+        let allocationStr = '₦0.00';
+        let hasTxn = false;
+        let bankAccountMasked = '';
+
+        if (homeRes && homeRes.ok) {
+          const home = await homeRes.json();
+          const paidKobo = home.paid_out || 0;
+          const potKobo = home.potential?.illustrative_value_kobo || 0;
+          const totalNaira = (paidKobo || potKobo) / 100;
+          if (totalNaira > 0) {
+            allocationStr = `₦${totalNaira.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
+            hasTxn = paidKobo > 0;
+          }
+        }
+
+        if (payoutRes && payoutRes.ok) {
+          const payout = await payoutRes.json();
+          if (payout.account_number_masked) {
+            bankAccountMasked = payout.account_number_masked;
+          }
+        }
+
+        setData({
+          potential_allocation: allocationStr,
+          has_transactions: hasTxn,
+          account_masked: bankAccountMasked,
+        });
+      })
+      .catch(() => {
+        // fallback
+      });
+  }, []);
 
   return (
     <div className="max-w-5xl mx-auto space-y-8">

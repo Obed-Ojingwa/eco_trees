@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, Clock, Circle, Info } from 'lucide-react';
 
 interface FarmProgressData {
@@ -8,11 +9,68 @@ interface FarmProgressData {
 }
 
 export default function ProjectProgress() {
-  const [data] = useState<FarmProgressData>({
-    farm_name: 'Green Valley Farm',
-    submitted_date: '7 November 2026',
-    status: 'Under review',
-  });
+  const navigate = useNavigate();
+  const [data, setData] = useState<FarmProgressData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/plots', { credentials: 'include' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (json && Array.isArray(json.items) && json.items.length > 0) {
+          const plot = json.items[0];
+          const statusMap: Record<string, string> = {
+            draft: 'Draft',
+            submitted: 'Under review',
+            verified: 'Internally approved',
+            flagged: 'Changes requested',
+            rejected: 'Rejected',
+          };
+          setData({
+            farm_name: plot.farmer_display_name ? `${plot.farmer_display_name}'s Farm` : 'Farm Project',
+            submitted_date: new Date(plot.created_at || Date.now()).toLocaleDateString('en-GB', {
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric',
+            }),
+            status: statusMap[plot.status] || 'Under review',
+          });
+        }
+      })
+      .catch(() => {
+        // empty state
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return <div className="p-8 text-gray-500 text-sm">Loading project progress...</div>;
+  }
+
+  if (!data) {
+    return (
+      <div className="max-w-xl mx-auto py-20 text-center space-y-4">
+        <div className="w-14 h-14 rounded-2xl bg-[#eaf3ec] flex items-center justify-center text-[#1b4332] mx-auto">
+          <Clock size={26} />
+        </div>
+        <h2 className="text-xl font-bold text-gray-900">No project in review</h2>
+        <p className="text-xs text-gray-500 max-w-sm mx-auto leading-relaxed">
+          You haven&apos;t submitted a farm project for review yet. Register your farm to track verification progress here.
+        </p>
+        <div className="pt-2">
+          <button
+            onClick={() => navigate('/farmer/register')}
+            className="bg-[#1e4d3a] hover:bg-[#163c2c] text-white text-xs font-semibold px-6 py-3 rounded-xl transition-colors cursor-pointer"
+          >
+            Register a farm
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const isApproved = data.status === 'Internally approved';
+  const isChanges = data.status === 'Changes requested';
 
   return (
     <div className="max-w-5xl mx-auto space-y-8">
@@ -60,25 +118,31 @@ export default function ProjectProgress() {
             </p>
           </div>
 
-          {/* Step 2: Under review (Current active step) */}
-          <div className="bg-[#f2f7f4] rounded-2xl p-6 space-y-2 border border-[#1b4332]/20">
-            <Clock size={20} className="text-[#1b4332]" />
-            <h4 className="font-bold text-sm text-[#1b4332] pt-1">
+          {/* Step 2: Under review */}
+          <div className={`bg-[#f2f7f4] rounded-2xl p-6 space-y-2 ${isApproved ? 'opacity-80' : 'border border-[#1b4332]/20'}`}>
+            <Clock size={20} className={isApproved ? 'text-gray-400' : 'text-[#1b4332]'} />
+            <h4 className={`font-bold text-sm pt-1 ${isApproved ? 'text-gray-900' : 'text-[#1b4332]'}`}>
               Under review
             </h4>
-            <p className="text-xs text-[#1b4332]/90 leading-relaxed font-medium">
-              Our team is taking a closer look.
+            <p className="text-xs text-gray-600 leading-relaxed font-medium">
+              {isApproved ? 'Review completed.' : isChanges ? 'Changes requested by auditor.' : 'Our team is taking a closer look.'}
             </p>
           </div>
 
           {/* Step 3: Review decision */}
-          <div className="bg-[#f2f7f4] rounded-2xl p-6 space-y-2 opacity-80">
-            <Circle size={20} className="text-gray-400" />
-            <h4 className="font-bold text-sm text-gray-900 pt-1">
+          <div className={`bg-[#f2f7f4] rounded-2xl p-6 space-y-2 ${isApproved ? 'border border-[#1b4332]/20' : 'opacity-80'}`}>
+            {isApproved ? (
+              <CheckCircle2 size={20} className="text-[#1b4332]" />
+            ) : (
+              <Circle size={20} className="text-gray-400" />
+            )}
+            <h4 className={`font-bold text-sm pt-1 ${isApproved ? 'text-[#1b4332]' : 'text-gray-900'}`}>
               Review decision
             </h4>
             <p className="text-xs text-gray-600 leading-relaxed">
-              We’ll let you know here when there’s news.
+              {isApproved
+                ? 'Internally approved by EcoTrees review team.'
+                : 'We’ll let you know here when there’s news.'}
             </p>
           </div>
         </div>

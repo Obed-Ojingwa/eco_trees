@@ -28,33 +28,65 @@ interface OverviewData {
   recent_activity: ActivityItem[];
 }
 
-// Fetch function calling backend directly with fallback
+// Fetch function calling backend directly with clean empty state
 async function fetchAuditorOverview(): Promise<OverviewData> {
   try {
-    const res = await fetch('/api/auditor/overview');
+    const res = await fetch('/api/plots', { credentials: 'include' });
     if (!res.ok) throw new Error('API unavailable');
-    return await res.json();
+    const json = await res.json();
+    if (json && Array.isArray(json.items)) {
+      const items = json.items as {
+        id: string;
+        farmer_display_name?: string;
+        status?: string;
+        flags?: string[];
+      }[];
+
+      const awaiting = items.filter((p) => p.status === 'submitted').length;
+      const verified = items.filter((p) => p.status === 'verified').length;
+      const flagged = items.filter((p) => p.status === 'flagged').length;
+      const rejected = items.filter((p) => p.status === 'rejected').length;
+
+      const priorityQueue: PriorityQueueItem[] = items.slice(0, 3).map((p) => ({
+        id: `ET-${p.id.slice(0, 8)}`,
+        farm: p.farmer_display_name ? `${p.farmer_display_name}'s Farm` : 'Farm Project',
+        status:
+          p.status === 'verified'
+            ? 'Internally approved'
+            : p.status === 'submitted'
+            ? 'Awaiting review'
+            : p.status === 'draft'
+            ? 'Draft'
+            : p.status || 'Awaiting review',
+      }));
+
+      return {
+        stats: {
+          awaiting_review: String(awaiting).padStart(2, '0'),
+          under_review: String(items.filter((p) => p.status === 'submitted' || p.status === 'draft').length).padStart(2, '0'),
+          resubmitted: String(flagged).padStart(2, '0'),
+          internally_approved: String(verified).padStart(2, '0'),
+          changes_requested: String(flagged).padStart(2, '0'),
+          rejected: String(rejected).padStart(2, '0'),
+        },
+        priority_queue: priorityQueue,
+        recent_activity: [],
+      };
+    }
+    throw new Error('No items');
   } catch {
-    // Minimal fallback matching the UI specification
+    // Empty state fallback
     return {
       stats: {
-        awaiting_review: '24',
-        under_review: '08',
-        resubmitted: '05',
-        internally_approved: '36',
-        changes_requested: '12',
-        rejected: '03',
+        awaiting_review: '00',
+        under_review: '00',
+        resubmitted: '00',
+        internally_approved: '00',
+        changes_requested: '00',
+        rejected: '00',
       },
-      priority_queue: [
-        { id: 'ET-00124', farm: 'Green Valley Farm', status: 'Resubmitted' },
-        { id: 'ET-00118', farm: 'Sunrise Agro Farm', status: 'Awaiting review' },
-        { id: 'ET-00109', farm: 'Olu Farm Project', status: 'Awaiting review' },
-      ],
-      recent_activity: [
-        { actor: 'A. Bello requested changes', target: 'ET-00120', time: '10:42' },
-        { actor: 'M. Ade internally approved', target: 'ET-00117', time: '09:15' },
-        { actor: 'A. Bello reviewed evidence', target: 'ET-00115', time: 'Yesterday' },
-      ],
+      priority_queue: [],
+      recent_activity: [],
     };
   }
 }
@@ -130,20 +162,26 @@ export default function AuditorOverview() {
             </p>
 
             <div className="space-y-3">
-              {data.priority_queue.map((item) => (
-                <div
-                  key={item.id}
-                  onClick={() => navigate(`/auditor/project-inspection/${item.id}`)}
-                  className="bg-[#f8faf8] border border-gray-100/90 rounded-2xl px-5 py-4 text-sm text-gray-800 flex items-center cursor-pointer hover:bg-gray-100/70 transition-colors"
-                >
-                  <span className="font-semibold text-gray-900 mr-2">
-                    {item.id}
-                  </span>
-                  <span className="text-gray-700">{item.farm}</span>
-                  <span className="mx-2 text-gray-400">·</span>
-                  <span className="text-gray-600">{item.status}</span>
+              {data.priority_queue.length > 0 ? (
+                data.priority_queue.map((item) => (
+                  <div
+                    key={item.id}
+                    onClick={() => navigate(`/auditor/project-inspection/${item.id}`)}
+                    className="bg-[#f8faf8] border border-gray-100/90 rounded-2xl px-5 py-4 text-sm text-gray-800 flex items-center cursor-pointer hover:bg-gray-100/70 transition-colors"
+                  >
+                    <span className="font-semibold text-gray-900 mr-2">
+                      {item.id}
+                    </span>
+                    <span className="text-gray-700">{item.farm}</span>
+                    <span className="mx-2 text-gray-400">·</span>
+                    <span className="text-gray-600">{item.status}</span>
+                  </div>
+                ))
+              ) : (
+                <div className="py-10 text-center text-xs text-gray-400 bg-[#f8faf8] rounded-2xl border border-dashed border-gray-200">
+                  No projects waiting in priority queue.
                 </div>
-              ))}
+              )}
             </div>
           </div>
 
@@ -164,14 +202,20 @@ export default function AuditorOverview() {
           </h3>
 
           <div className="space-y-5">
-            {data.recent_activity.map((act, idx) => (
-              <div key={idx} className="text-xs">
-                <p className="text-gray-700 font-medium leading-relaxed">
-                  {act.actor} · <span className="text-gray-800 font-semibold">{act.target}</span>
-                </p>
-                <p className="text-gray-400 mt-0.5">· {act.time}</p>
+            {data.recent_activity.length > 0 ? (
+              data.recent_activity.map((act, idx) => (
+                <div key={idx} className="text-xs">
+                  <p className="text-gray-700 font-medium leading-relaxed">
+                    {act.actor} · <span className="text-gray-800 font-semibold">{act.target}</span>
+                  </p>
+                  <p className="text-gray-400 mt-0.5">· {act.time}</p>
+                </div>
+              ))
+            ) : (
+              <div className="py-10 text-center text-xs text-gray-400">
+                No recent activity recorded.
               </div>
-            ))}
+            )}
           </div>
         </div>
       </div>

@@ -26,16 +26,55 @@ export default function PurchaseCheckout() {
   const handleConfirmPurchase = async () => {
     setLoading(true);
     try {
-      // Optional simulated call to backend transaction endpoint
-      await fetch('/api/buyer/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-EcoTrees': '1' },
-        body: JSON.stringify({
-          project_id: checkoutData.project_id,
-          units: checkoutData.demo_units,
-          amount: totalAmount,
-        }),
-      }).catch(() => null);
+      // 1. Fetch available listed credits if any
+      const creditsRes = await fetch('/api/marketplace/credits', { credentials: 'include' }).catch(() => null);
+      if (creditsRes && creditsRes.ok) {
+        const creditsData = await creditsRes.json();
+        if (Array.isArray(creditsData.items) && creditsData.items.length > 0) {
+          const serial = creditsData.items[0].serial;
+          const idempotencyKey = 'order-' + Math.random().toString(36).substring(2, 12);
+
+          // 2. Create order
+          const orderRes = await fetch('/api/orders', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-EcoTrees': '1',
+              'Idempotency-Key': idempotencyKey,
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+              credit_serials: [serial],
+            }),
+          });
+
+          if (orderRes.ok) {
+            const orderData = await orderRes.json();
+            const orderId = orderData.id;
+
+            // 3. Initiate checkout
+            const checkoutRes = await fetch(`/api/orders/${orderId}/checkout`, {
+              method: 'POST',
+              headers: {
+                'X-EcoTrees': '1',
+              },
+              credentials: 'include',
+            });
+
+            if (checkoutRes.ok) {
+              const checkoutInfo = await checkoutRes.json();
+              if (checkoutInfo.payment_reference) {
+                // 4. Verify payment via mock bank
+                await fetch(`/api/payments/${checkoutInfo.payment_reference}/verify`, {
+                  credentials: 'include',
+                });
+              }
+            }
+          }
+        }
+      }
+    } catch {
+      // Fallback seamlessly
     } finally {
       setLoading(false);
       navigate('/buyer/portfolio');

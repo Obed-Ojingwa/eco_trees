@@ -13,61 +13,34 @@ interface HistoryItem {
 
 async function fetchReviewHistory(): Promise<HistoryItem[]> {
   try {
-    const res = await fetch('/api/plots');
+    const res = await fetch('/api/plots', { credentials: 'include' });
     if (!res.ok) throw new Error();
     const data = await res.json();
     if (Array.isArray(data.items) && data.items.length > 0) {
-      return data.items.map((p: Record<string, unknown>, idx: number) => {
-        const action = String(p.status || 'Reviewed');
+      return data.items.map((p: { id: string; status?: string; updated_at?: string; created_at?: string }, idx: number) => {
+        const statusMap: Record<string, string> = {
+          submitted: 'Awaiting review',
+          verified: 'Internally approved',
+          flagged: 'Changes requested',
+          rejected: 'Rejected',
+          draft: 'Draft created',
+        };
+        const action = statusMap[p.status || ''] || p.status || 'Reviewed';
+        const dateObj = new Date(p.updated_at || p.created_at || Date.now());
         return {
           id: String(p.id || idx),
-          date: '07 Nov 2026',
-          time: '11:18',
-          reviewer: 'A. Bello',
-          project_id: String(p.id || 'ET-00124'),
+          date: dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+          time: dateObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+          reviewer: 'Auditor Reviewer',
+          project_id: `Project ET-${p.id.slice(0, 5)}`,
           action,
           isApproved: action.toLowerCase().includes('approved'),
         };
       });
     }
-    throw new Error();
+    return [];
   } catch {
-    // Exact fallback matching the UI specification
-    return [
-      {
-        id: '1',
-        date: '07 Nov 2026',
-        time: '11:18',
-        reviewer: 'A. Bello',
-        project_id: 'Project ET-00124',
-        action: 'Farmer resubmitted evidence',
-      },
-      {
-        id: '2',
-        date: '07 Nov 2026',
-        time: '10:42',
-        reviewer: 'A. Bello',
-        project_id: 'Project ET-00120',
-        action: 'Changes requested',
-      },
-      {
-        id: '3',
-        date: '06 Nov 2026',
-        time: '16:04',
-        reviewer: 'M. Ade',
-        project_id: 'Project ET-00117',
-        action: 'Internally approved',
-        isApproved: true,
-      },
-      {
-        id: '4',
-        date: '05 Nov 2026',
-        time: '13:20',
-        reviewer: 'A. Bello',
-        project_id: 'Project ET-00115',
-        action: 'Review started',
-      },
-    ];
+    return [];
   }
 }
 
@@ -142,35 +115,41 @@ export default function ReviewHistory() {
 
       {/* Main List Container */}
       <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-[0_1px_2px_rgba(0,0,0,0.02)] space-y-3">
-        {filteredHistory.map((item) => {
-          const isGreen = item.isApproved;
-          return (
-            <div
-              key={item.id}
-              className={`rounded-xl px-5 py-4 flex items-center text-xs transition-colors ${
-                isGreen
-                  ? 'bg-[#f0f7f2] text-[#1b4332]'
-                  : 'bg-[#f8faf8] text-gray-700'
-              }`}
-            >
-              <Clock
-                size={16}
-                className={`mr-3 shrink-0 ${isGreen ? 'text-[#1b4332]' : 'text-gray-500'}`}
-              />
-              <span>{item.date}</span>
-              <span className="mx-2 text-gray-400">·</span>
-              <span>{item.time}</span>
-              <span className="mx-2 text-gray-400">·</span>
-              <span className="font-medium">{item.reviewer}</span>
-              <span className="mx-2 text-gray-400">·</span>
-              <span className="font-semibold">{item.project_id}</span>
-              <span className="mx-2 text-gray-400">·</span>
-              <span className={isGreen ? 'font-semibold text-[#1b4332]' : 'text-gray-600'}>
-                {item.action}
-              </span>
-            </div>
-          );
-        })}
+        {filteredHistory.length > 0 ? (
+          filteredHistory.map((item) => {
+            const isGreen = item.isApproved;
+            return (
+              <div
+                key={item.id}
+                className={`rounded-xl px-5 py-4 flex items-center text-xs transition-colors ${
+                  isGreen
+                    ? 'bg-[#f0f7f2] text-[#1b4332]'
+                    : 'bg-[#f8faf8] text-gray-700'
+                }`}
+              >
+                <Clock
+                  size={16}
+                  className={`mr-3 shrink-0 ${isGreen ? 'text-[#1b4332]' : 'text-gray-500'}`}
+                />
+                <span>{item.date}</span>
+                <span className="mx-2 text-gray-400">·</span>
+                <span>{item.time}</span>
+                <span className="mx-2 text-gray-400">·</span>
+                <span className="font-medium">{item.reviewer}</span>
+                <span className="mx-2 text-gray-400">·</span>
+                <span className="font-semibold">{item.project_id}</span>
+                <span className="mx-2 text-gray-400">·</span>
+                <span className={isGreen ? 'font-semibold text-[#1b4332]' : 'text-gray-600'}>
+                  {item.action}
+                </span>
+              </div>
+            );
+          })
+        ) : (
+          <div className="py-14 text-center text-xs text-gray-400">
+            No audit review history recorded yet.
+          </div>
+        )}
       </div>
     </div>
   );

@@ -7,10 +7,15 @@ async function registerFarmerAccount(
   emailOrPhone: string,
   secret: string
 ): Promise<void> {
-  // If it's digits/phone format, pass phone + pin, else fallback to email
-  const isPhone = /^\+?[0-9]{7,19}$/.test(emailOrPhone.replace(/\s/g, ''));
-  const phone = isPhone ? emailOrPhone.replace(/\s/g, '') : '+2348000000001';
-  const pin = /^\d{4,8}$/.test(secret) ? secret : '2468';
+  let phone = emailOrPhone.replace(/\s+/g, '');
+  if (phone.startsWith('0') && phone.length === 11) {
+    phone = '+234' + phone.slice(1);
+  } else if (!phone.startsWith('+')) {
+    phone = '+' + phone;
+  }
+
+  // Ensure PIN is numeric
+  const pin = secret.replace(/\D/g, '').padEnd(4, '0').slice(0, 8);
 
   const res = await fetch('/api/auth/register', {
     method: 'POST',
@@ -24,13 +29,14 @@ async function registerFarmerAccount(
       phone,
       pin,
     }),
-  }).catch(() => null);
+  });
 
-  if (res && !res.ok && res.status !== 409) {
+  if (!res.ok) {
     const errorData = await res.json().catch(() => null);
     if (errorData?.error?.message) {
       throw new Error(errorData.error.message);
     }
+    throw new Error('Registration failed. Please check your details.');
   }
 }
 

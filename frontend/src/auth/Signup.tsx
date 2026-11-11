@@ -88,8 +88,8 @@ export default function Signup() {
     setLoading(true);
     try {
       await performRegistration(displayName.trim(), cleanPhone, pin);
-      // On successful registration as farmer, navigate to overview or dashboard
-      navigate('/auditor/overview');
+      // On successful registration as farmer, navigate to farmer overview
+      navigate('/farmer/overview');
     } catch (err: unknown) {
       if (err instanceof Error) {
         setErrorMessage(err.message);

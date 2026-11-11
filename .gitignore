@@ -10,4 +10,6 @@ __pycache__/
 .venv/
 venv/
 .env
+.venv
 backend/.env
+seed_demo.py

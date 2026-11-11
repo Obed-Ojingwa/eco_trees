@@ -8,10 +8,11 @@ interface AuditorSettingsData {
 
 async function fetchAuditorSettings(): Promise<AuditorSettingsData> {
   try {
-    const res = await fetch('/api/me');
+    const res = await fetch('/api/me', { credentials: 'include' });
     if (!res.ok) throw new Error();
+    const data = await res.json();
     return {
-      account_summary: 'Name · Email · Assigned role · Team',
+      account_summary: `${data.display_name || 'Auditor'} · ${data.email || data.phone || 'auditor@ecotrees.org'} · ${data.role || 'Auditor'}`,
       notifications_summary:
         'New submissions · Resubmissions · Assignment updates · Decision confirmations',
       standards_summary:

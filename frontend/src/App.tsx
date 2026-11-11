@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import LandingPage from './LandingPage';
 import AuditorLayout from './auditor/AuditorLayout';
 import AuditorOverview from './auditor/AuditorOverview';
 import ReviewQueue from './auditor/ReviewQueue';
@@ -67,12 +68,13 @@ export default function App() {
         </Route>
 
         {/* Aliases & defaults */}
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/home" element={<LandingPage />} />
         <Route path="/explore" element={<Navigate to="/buyer/explore" replace />} />
         <Route path="/portfolio" element={<Navigate to="/buyer/portfolio" replace />} />
         <Route path="/marketplace" element={<Navigate to="/buyer/explore" replace />} />
-        <Route path="/" element={<Navigate to="/farmer/overview" replace />} />
         <Route path="/overview" element={<Navigate to="/farmer/overview" replace />} />
-        <Route path="*" element={<Navigate to="/farmer/overview" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );
