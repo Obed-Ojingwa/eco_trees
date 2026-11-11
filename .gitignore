@@ -9,7 +9,6 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
-.env
 .venv
 backend/.env
 seed_demo.py
@@ -17,3 +16,5 @@ backend/supabase
 backend/RENDER.md
 frontend/DEPLOYMENT.md
 DEPLOYMENT.md
+config.bat
+node_modules
