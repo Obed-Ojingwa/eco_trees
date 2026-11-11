@@ -62,11 +62,13 @@ export default function Login() {
     setLoading(true);
     try {
       const response = await performLogin(identifier.trim(), secret.trim());
-      // On success, redirect to auditor workspace or appropriate view
+      // On success, redirect to appropriate workspace based on user role
       if (response.user.role === 'auditor' || response.user.role === 'admin') {
         navigate('/auditor/overview');
+      } else if (response.user.role === 'buyer') {
+        navigate('/buyer/explore');
       } else {
-        navigate('/auditor/overview');
+        navigate('/farmer/overview');
       }
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -79,10 +81,23 @@ export default function Login() {
     }
   };
 
-  // Demo shortcut for quick review testing
+  // Demo shortcuts for quick testing with seeded accounts
   const handleQuickAuditorDemo = () => {
     setIdentifier('auditor@ecotrees.org');
     setSecret('AuditorPass123!');
+    setErrorMessage('');
+  };
+
+  const handleQuickFarmerDemo = () => {
+    setIdentifier('+2348000000001');
+    setSecret('2468');
+    setErrorMessage('');
+  };
+
+  const handleQuickBuyerDemo = () => {
+    setIdentifier('buyer@ecotrees.org');
+    setSecret('BuyerPass123!');
+    setErrorMessage('');
   };
 
   return (
@@ -199,22 +214,58 @@ export default function Login() {
           </button>
         </form>
 
-        {/* Quick Demo Helper */}
-        <div className="mt-6 pt-5 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
-          <button
-            type="button"
-            onClick={handleQuickAuditorDemo}
-            className="text-[11px] text-gray-400 hover:text-[#1b4332] transition-colors cursor-pointer"
-          >
-            Fill auditor demo credentials
-          </button>
+        {/* Seeded Demo Credentials Panel */}
+        <div className="mt-6 pt-5 border-t border-gray-100 space-y-2.5">
+          <div className="flex items-center justify-between text-[11px] text-gray-500">
+            <span className="font-semibold text-gray-700">Seeded Demo Logins:</span>
+            <Link
+              to="/auditor/overview"
+              className="text-gray-400 hover:text-[#1b4332] transition-colors"
+            >
+              Skip to app &rarr;
+            </Link>
+          </div>
 
-          <Link
-            to="/auditor/overview"
-            className="text-[11px] text-gray-400 hover:text-[#1b4332] transition-colors"
-          >
-            Skip to Auditor Workspace &rarr;
-          </Link>
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={handleQuickAuditorDemo}
+              className="text-left p-2 rounded-xl bg-gray-50 hover:bg-[#eaf3ec] border border-gray-200/80 hover:border-[#1b4332]/30 transition-all cursor-pointer group"
+            >
+              <span className="block text-[11px] font-bold text-gray-800 group-hover:text-[#1b4332]">
+                Auditor
+              </span>
+              <span className="block text-[10px] text-gray-400 truncate">
+                auditor@...
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleQuickFarmerDemo}
+              className="text-left p-2 rounded-xl bg-gray-50 hover:bg-[#eaf3ec] border border-gray-200/80 hover:border-[#1b4332]/30 transition-all cursor-pointer group"
+            >
+              <span className="block text-[11px] font-bold text-gray-800 group-hover:text-[#1b4332]">
+                Farmer
+              </span>
+              <span className="block text-[10px] text-gray-400 truncate">
+                +234800...
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleQuickBuyerDemo}
+              className="text-left p-2 rounded-xl bg-gray-50 hover:bg-[#eaf3ec] border border-gray-200/80 hover:border-[#1b4332]/30 transition-all cursor-pointer group"
+            >
+              <span className="block text-[11px] font-bold text-gray-800 group-hover:text-[#1b4332]">
+                Buyer
+              </span>
+              <span className="block text-[10px] text-gray-400 truncate">
+                buyer@...
+              </span>
+            </button>
+          </div>
         </div>
 
         {/* Switch to Signup */}

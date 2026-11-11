@@ -13,56 +13,36 @@ interface FarmProjectItem {
 
 async function fetchFarmProjects(): Promise<FarmProjectItem[]> {
   try {
-    const res = await fetch('/api/plots');
+    const res = await fetch('/api/plots', { credentials: 'include' });
     if (!res.ok) throw new Error();
     const data = await res.json();
     if (Array.isArray(data.items) && data.items.length > 0) {
-      return data.items.map((p: Record<string, unknown>) => {
-        const status = String(p.status || 'Awaiting review');
+      return data.items.map((p: {
+        id: string;
+        farmer_display_name?: string;
+        status?: string;
+      }) => {
+        const statusMap: Record<string, string> = {
+          submitted: 'Awaiting review',
+          verified: 'Internally approved',
+          flagged: 'Changes requested',
+          rejected: 'Rejected',
+          draft: 'Draft',
+        };
+        const status = statusMap[p.status || ''] || p.status || 'Awaiting review';
         return {
-          id: String(p.id || 'ET-00000'),
-          farm: String(p.farm || p.farmer_display_name || 'Farm Project'),
-          farmer: String(p.farmer || p.farmer_display_name || 'Assigned Farmer'),
-          state: String(p.state || 'Ogun'),
+          id: `ET-${p.id.slice(0, 5)}`,
+          farm: p.farmer_display_name ? `${p.farmer_display_name}'s Farm` : 'Farm Project',
+          farmer: p.farmer_display_name || 'Assigned Farmer',
+          state: 'Ogun',
           status,
           isApproved: status.toLowerCase().includes('approved'),
         };
       });
     }
-    throw new Error();
+    return [];
   } catch {
-    // Exact fallback matching the UI specification
-    return [
-      {
-        id: 'ET-00124',
-        farm: 'Green Valley Farm',
-        farmer: 'Ama Farmer',
-        state: 'Ogun',
-        status: 'Resubmitted',
-      },
-      {
-        id: 'ET-00118',
-        farm: 'Sunrise Agro Farm',
-        farmer: 'K. Ade',
-        state: 'Ogun',
-        status: 'Awaiting review',
-      },
-      {
-        id: 'ET-00109',
-        farm: 'Olu Farm Project',
-        farmer: 'O. Yusuf',
-        state: 'Oyo',
-        status: 'Internally approved',
-        isApproved: true,
-      },
-      {
-        id: 'ET-00103',
-        farm: 'Green Earth',
-        farmer: 'B. James',
-        state: 'Osun',
-        status: 'Changes requested',
-      },
-    ];
+    return [];
   }
 }
 
@@ -149,37 +129,43 @@ export default function FarmProjects() {
 
       {/* Main List Container */}
       <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-[0_1px_2px_rgba(0,0,0,0.02)] space-y-3">
-        {filteredProjects.map((p) => {
-          const isGreen = p.isApproved;
-          return (
-            <div
-              key={p.id}
-              onClick={() => navigate(`/auditor/project-inspection/${p.id}`)}
-              className={`rounded-xl px-5 py-4 flex items-center text-xs cursor-pointer transition-colors ${
-                isGreen
-                  ? 'bg-[#f0f7f2] text-[#1b4332] hover:bg-[#e6f2e9]'
-                  : 'bg-[#f8faf8] text-gray-700 hover:bg-gray-100/70'
-              }`}
-            >
-              <MapPin
-                size={16}
-                className={`mr-3 shrink-0 ${isGreen ? 'text-[#1b4332]' : 'text-gray-500'}`}
-              />
-              <span className={`font-semibold mr-2 ${isGreen ? 'text-[#1b4332]' : 'text-gray-900'}`}>
-                {p.id}
-              </span>
-              <span className="font-medium">{p.farm}</span>
-              <span className="mx-2 text-gray-400">·</span>
-              <span>{p.farmer}</span>
-              <span className="mx-2 text-gray-400">·</span>
-              <span>{p.state}</span>
-              <span className="mx-2 text-gray-400">·</span>
-              <span className={isGreen ? 'font-semibold text-[#1b4332]' : 'text-gray-600'}>
-                {p.status}
-              </span>
-            </div>
-          );
-        })}
+        {filteredProjects.length > 0 ? (
+          filteredProjects.map((p) => {
+            const isGreen = p.isApproved;
+            return (
+              <div
+                key={p.id}
+                onClick={() => navigate(`/auditor/project-inspection/${p.id}`)}
+                className={`rounded-xl px-5 py-4 flex items-center text-xs cursor-pointer transition-colors ${
+                  isGreen
+                    ? 'bg-[#f0f7f2] text-[#1b4332] hover:bg-[#e6f2e9]'
+                    : 'bg-[#f8faf8] text-gray-700 hover:bg-gray-100/70'
+                }`}
+              >
+                <MapPin
+                  size={16}
+                  className={`mr-3 shrink-0 ${isGreen ? 'text-[#1b4332]' : 'text-gray-500'}`}
+                />
+                <span className={`font-semibold mr-2 ${isGreen ? 'text-[#1b4332]' : 'text-gray-900'}`}>
+                  {p.id}
+                </span>
+                <span className="font-medium">{p.farm}</span>
+                <span className="mx-2 text-gray-400">·</span>
+                <span>{p.farmer}</span>
+                <span className="mx-2 text-gray-400">·</span>
+                <span>{p.state}</span>
+                <span className="mx-2 text-gray-400">·</span>
+                <span className={isGreen ? 'font-semibold text-[#1b4332]' : 'text-gray-600'}>
+                  {p.status}
+                </span>
+              </div>
+            );
+          })
+        ) : (
+          <div className="py-14 text-center text-xs text-gray-400">
+            No farm projects registered yet.
+          </div>
+        )}
       </div>
     </div>
   );

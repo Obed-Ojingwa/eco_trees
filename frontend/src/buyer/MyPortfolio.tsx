@@ -23,9 +23,63 @@ interface PortfolioData {
 
 async function fetchPortfolioData(): Promise<PortfolioData> {
   try {
-    const res = await fetch('/api/buyer/portfolio');
-    if (!res.ok) throw new Error();
-    return await res.json();
+    const [creditsRes, ordersRes] = await Promise.all([
+      fetch('/api/buyer/credits', { credentials: 'include' }).catch(() => null),
+      fetch('/api/orders', { credentials: 'include' }).catch(() => null),
+    ]);
+
+    let count = 1;
+    let units = 100;
+    let spendNaira = 500000;
+    const txns: PortfolioTransaction[] = [];
+
+    if (creditsRes && creditsRes.ok) {
+      const data = await creditsRes.json();
+      if (Array.isArray(data.items) && data.items.length > 0) {
+        units = data.items.length;
+        data.items.forEach((c: {
+          serial: string;
+          acquired_at?: string;
+          batch_number?: string;
+          price_per_tonne_kobo?: number;
+          status?: string;
+        }) => {
+          const cost = (c.price_per_tonne_kobo || 500000) / 100;
+          txns.push({
+            id: c.serial,
+            date: c.acquired_at ? new Date(c.acquired_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Today',
+            project: `Batch ${c.batch_number || '01'} Unit`,
+            demo_units: 1,
+            amount: `₦${cost.toLocaleString('en-NG')}`,
+            status: c.status || 'Active',
+          });
+        });
+      }
+    }
+
+    if (ordersRes && ordersRes.ok) {
+      const orders = await ordersRes.json();
+      if (Array.isArray(orders.items) && orders.items.length > 0) {
+        count = orders.items.length;
+        let totalKobo = 0;
+        orders.items.forEach((o: { total_kobo?: number }) => {
+          totalKobo += o.total_kobo || 0;
+        });
+        if (totalKobo > 0) spendNaira = totalKobo / 100;
+      }
+    }
+
+    if (txns.length > 0) {
+      return {
+        stats: {
+          demo_purchases: String(count).padStart(2, '0'),
+          demo_units: String(units),
+          illustrative_spend: `₦${spendNaira.toLocaleString('en-NG')}`,
+        },
+        transactions: txns,
+      };
+    }
+    throw new Error();
   } catch {
     // Exact fallback matching the UI specification
     return {

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { MapPin, Image as ImageIcon } from 'lucide-react';
 
 interface InspectionProject {
   id: string;
+  displayId?: string;
   name: string;
   farmer: string;
   location: string;
@@ -19,69 +20,175 @@ interface InspectionProject {
   planting_date: string;
   satellite_note: string;
   history_note: string;
+  photos?: { id: string; content_url: string }[];
 }
 
-async function fetchProjectInspection(id?: string): Promise<InspectionProject> {
-  try {
-    const res = await fetch(`/api/plots/${id || 'ET-00124'}`);
-    if (!res.ok) throw new Error();
-    const data = await res.json();
-    return {
-      id: data.id || 'ET-2026-00124',
-      name: data.farm_name || 'Green Valley Farm',
-      farmer: data.farmer_display_name || 'Ama Farmer',
-      location: 'Abeokuta, Ogun State',
-      submitted_at: '07 Nov 2026',
-      status: 'Resubmitted',
-      farm_type: 'Agroforestry',
-      lga: 'Abeokuta',
-      declared_area: `${data.area_ha || 2.5} ha`,
-      mapping_type: 'GPS walk-around',
-      species: 'Mango',
-      tree_count: 250,
-      planting_status: 'Newly planted',
-      planting_date: 'Approx. 2025',
-      satellite_note:
-        'No verified observation attached to this submission. Do not infer tree survival from unavailable imagery.',
-      history_note:
-        '05 Nov · A. Bello · Changes requested: add a clearer tree photo. | 07 Nov · Farmer resubmitted existing project.',
-    };
-  } catch {
-    // Exact fallback matching the UI specification
-    return {
-      id: 'ET-2026-00124',
-      name: 'Green Valley Farm',
-      farmer: 'Ama Farmer',
-      location: 'Abeokuta, Ogun State',
-      submitted_at: '07 Nov 2026',
-      status: 'Resubmitted',
-      farm_type: 'Agroforestry',
-      lga: 'Abeokuta',
-      declared_area: '2.5 ha',
-      mapping_type: 'GPS walk-around',
-      species: 'Mango',
-      tree_count: 250,
-      planting_status: 'Newly planted',
-      planting_date: 'Approx. 2025',
-      satellite_note:
-        'No verified observation attached to this submission. Do not infer tree survival from unavailable imagery.',
-      history_note:
-        '05 Nov · A. Bello · Changes requested: add a clearer tree photo. | 07 Nov · Farmer resubmitted existing project.',
-    };
+async function fetchProjectInspection(id?: string): Promise<InspectionProject | null> {
+  if (id && id.length > 5) {
+    try {
+      const [plotRes, monRes] = await Promise.all([
+        fetch(`/api/plots/${id}`, { credentials: 'include' }).catch(() => null),
+        fetch(`/api/plots/${id}/monitoring`, { credentials: 'include' }).catch(() => null),
+      ]);
+
+      if (plotRes && plotRes.ok) {
+        const data = await plotRes.json();
+        let monNote =
+          'No verified observation attached to this submission. Do not infer tree survival from unavailable imagery.';
+        if (monRes && monRes.ok) {
+          const mon = await monRes.json();
+          if (mon.assessments && mon.assessments.length > 0) {
+            monNote = `Assessment: ${mon.assessments[0].summary || mon.monitoring_state}`;
+          } else if (mon.monitoring_state) {
+            monNote = `Monitoring state: ${mon.monitoring_state}. Initial observations pending.`;
+          }
+        }
+
+        let species = 'Gmelina';
+        let treeCount = 250;
+        let plantingDate = '2025';
+        if (Array.isArray(data.plantings) && data.plantings.length > 0) {
+          species = data.plantings[0].species_code || 'Gmelina';
+          treeCount = data.plantings.reduce(
+            (sum: number, pl: { trees_planted?: number }) => sum + (pl.trees_planted || 0),
+            0
+          );
+          plantingDate = data.plantings[0].planted_on || '2025';
+        }
+
+        const statusMap: Record<string, string> = {
+          submitted: 'Awaiting review',
+          verified: 'Internally approved',
+          flagged: 'Changes requested',
+          rejected: 'Rejected',
+          draft: 'Draft',
+        };
+
+        return {
+          id: data.id,
+          displayId: `ET-${data.id.slice(0, 8)}`,
+          name: data.farmer_display_name ? `${data.farmer_display_name}'s Farm` : 'Farm Project',
+          farmer: data.farmer_display_name || 'Assigned Farmer',
+          location: 'Abeokuta, Ogun State',
+          submitted_at: data.created_at
+            ? new Date(data.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+            : 'Today',
+          status: statusMap[data.status] || data.status,
+          farm_type: 'Agroforestry',
+          lga: 'Abeokuta',
+          declared_area: `${data.area_ha || 0} ha`,
+          mapping_type: 'GPS walk-around',
+          species,
+          tree_count: treeCount,
+          planting_status: 'Newly planted',
+          planting_date: plantingDate,
+          satellite_note: monNote,
+          history_note: 'Submission received by EcoTrees internal review workspace.',
+          photos: data.photos || [],
+        };
+      }
+    } catch {
+      return null;
+    }
   }
+
+  return null;
 }
 
 export default function ProjectInspection() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [project, setProject] = useState<InspectionProject | null>(null);
+  const [loading, setLoading] = useState(true);
   const [comment, setComment] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
+  const [decisionMessage, setDecisionMessage] = useState('');
 
   useEffect(() => {
-    fetchProjectInspection(id).then(setProject);
+    setLoading(true);
+    fetchProjectInspection(id)
+      .then(setProject)
+      .finally(() => setLoading(false));
   }, [id]);
 
-  if (!project) {
+  const handleDecision = async (decision: 'verified' | 'rejected') => {
+    if (!project) return;
+    setActionLoading(true);
+    setDecisionMessage('');
+    try {
+      const res = await fetch(`/api/auditor/plots/${project.id}/verification`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-EcoTrees': '1',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          decision,
+          note: comment.trim() || (decision === 'verified' ? 'Planting and evidence reviewed.' : 'Rejected upon inspection.'),
+        }),
+      });
+
+      if (res.ok) {
+        setProject((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: decision === 'verified' ? 'Internally approved' : 'Rejected',
+                history_note: `Today · Decision recorded: ${decision}. Note: ${comment || 'Reviewed.'}`,
+              }
+            : prev
+        );
+        setDecisionMessage(`Plot successfully ${decision === 'verified' ? 'approved' : 'rejected'}.`);
+      } else {
+        const err = await res.json().catch(() => null);
+        setDecisionMessage(err?.error?.message || 'Could not record decision.');
+      }
+    } catch {
+      setDecisionMessage('Network error occurred.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRequestChanges = () => {
+    if (!project) return;
+    setProject((prev) =>
+      prev
+        ? {
+            ...prev,
+            status: 'Changes requested',
+            history_note: `Today · Auditor requested changes: ${comment || 'Provide clearer evidence photos.'}`,
+          }
+        : prev
+    );
+    setDecisionMessage('Changes requested note recorded.');
+  };
+
+  if (loading) {
     return <div className="p-8 text-gray-500 text-sm">Loading project inspection...</div>;
+  }
+
+  if (!project) {
+    return (
+      <div className="max-w-xl mx-auto py-20 text-center space-y-4">
+        <div className="w-14 h-14 rounded-2xl bg-[#eaf3ec] flex items-center justify-center text-[#1b4332] mx-auto">
+          <MapPin size={26} />
+        </div>
+        <h2 className="text-xl font-bold text-gray-900">No project selected</h2>
+        <p className="text-xs text-gray-500 max-w-sm mx-auto leading-relaxed">
+          Select a farm project from the review queue to inspect its boundary mapping, tree details, and ground photos.
+        </p>
+        <div className="pt-2">
+          <button
+            onClick={() => navigate('/auditor/review-queue')}
+            className="bg-[#1e4d3a] hover:bg-[#163c2c] text-white text-xs font-semibold px-6 py-3 rounded-xl transition-colors cursor-pointer"
+          >
+            Open review queue
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -100,7 +207,7 @@ export default function ProjectInspection() {
       <div className="bg-white rounded-2xl border border-gray-100 p-6 flex items-center justify-between shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
         <div>
           <h2 className="text-lg font-bold text-gray-900">
-            {project.id} · {project.name}
+            {project.displayId || project.id} · {project.name}
           </h2>
           <p className="text-xs text-gray-500 mt-1">
             {project.farmer} · {project.location} · Submitted {project.submitted_at}
@@ -205,15 +312,36 @@ export default function ProjectInspection() {
               </p>
             </div>
 
+            {decisionMessage && (
+              <div className="p-3 bg-[#eaf3ec] border border-[#1b4332]/20 rounded-xl text-xs text-[#1b4332] font-medium">
+                {decisionMessage}
+              </div>
+            )}
+
             {/* Action Buttons */}
             <div className="space-y-2.5">
-              <button className="w-full bg-[#1e4d3a] hover:bg-[#163c2c] text-white text-xs font-semibold py-3 rounded-xl transition-colors cursor-pointer">
-                Internally approve
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={() => handleDecision('verified')}
+                className="w-full bg-[#1e4d3a] hover:bg-[#163c2c] disabled:opacity-60 text-white text-xs font-semibold py-3 rounded-xl transition-colors cursor-pointer"
+              >
+                {actionLoading ? 'Recording...' : 'Internally approve'}
               </button>
-              <button className="w-full border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-medium py-3 rounded-xl transition-colors cursor-pointer">
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={handleRequestChanges}
+                className="w-full border border-gray-200 hover:bg-gray-50 disabled:opacity-60 text-gray-700 text-xs font-medium py-3 rounded-xl transition-colors cursor-pointer"
+              >
                 Request changes
               </button>
-              <button className="w-full border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-medium py-3 rounded-xl transition-colors cursor-pointer">
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={() => handleDecision('rejected')}
+                className="w-full border border-gray-200 hover:bg-gray-50 disabled:opacity-60 text-gray-700 text-xs font-medium py-3 rounded-xl transition-colors cursor-pointer"
+              >
                 Reject submission
               </button>
             </div>

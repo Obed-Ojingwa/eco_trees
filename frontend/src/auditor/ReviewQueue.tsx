@@ -4,6 +4,7 @@ import { Search, ChevronDown } from 'lucide-react';
 
 interface ReviewQueueItem {
   id: string;
+  displayId?: string;
   farm: string;
   farmer: string;
   location: string;
@@ -14,61 +15,43 @@ interface ReviewQueueItem {
 
 async function fetchReviewQueue(): Promise<ReviewQueueItem[]> {
   try {
-    const res = await fetch('/api/plots');
+    const res = await fetch('/api/plots', { credentials: 'include' });
     if (!res.ok) throw new Error();
     const data = await res.json();
     if (Array.isArray(data.items) && data.items.length > 0) {
-      return data.items.map((p: Record<string, unknown>) => ({
-        id: String(p.id || 'ET-00000'),
-        farm: String(p.farm || p.farmer_display_name || 'Farm Project'),
-        farmer: String(p.farmer || p.farmer_display_name || 'Assigned Farmer'),
-        location: String(p.location || 'Ogun'),
-        submitted_at: String(p.submitted_at || p.created_at || 'Recent'),
-        status: String(p.status || 'Awaiting review'),
-        priority: String(p.priority || 'Normal'),
-      }));
+      return data.items.map((p: {
+        id: string;
+        farmer_display_name?: string;
+        created_at?: string;
+        status?: string;
+        flags?: string[];
+      }) => {
+        const statusMap: Record<string, string> = {
+          submitted: 'Awaiting review',
+          verified: 'Internally approved',
+          flagged: 'Changes requested',
+          rejected: 'Rejected',
+          draft: 'Draft',
+        };
+        const dateStr = p.created_at
+          ? new Date(p.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+          : 'Today';
+        const hasFlag = Array.isArray(p.flags) && p.flags.length > 0;
+        return {
+          id: p.id,
+          displayId: `ET-${p.id.slice(0, 5)}`,
+          farm: p.farmer_display_name ? `${p.farmer_display_name}'s Farm` : 'Farm Project',
+          farmer: p.farmer_display_name || 'Assigned Farmer',
+          location: 'Abeokuta, Ogun',
+          submitted_at: dateStr,
+          status: statusMap[p.status || ''] || 'Awaiting review',
+          priority: hasFlag ? 'High' : 'Normal',
+        };
+      });
     }
-    throw new Error();
+    return [];
   } catch {
-    // Exact fallback matching the UI specification
-    return [
-      {
-        id: 'ET-00124',
-        farm: 'Green Valley Farm',
-        farmer: 'Ama Farmer',
-        location: 'Abeokuta, Ogun',
-        submitted_at: '07 Nov 2026',
-        status: 'Resubmitted',
-        priority: 'High',
-      },
-      {
-        id: 'ET-00118',
-        farm: 'Sunrise Agro Farm',
-        farmer: 'K. Ade',
-        location: 'Ijebu, Ogun',
-        submitted_at: '06 Nov 2026',
-        status: 'Awaiting review',
-        priority: 'Normal',
-      },
-      {
-        id: 'ET-00109',
-        farm: 'Olu Farm Project',
-        farmer: 'O. Yusuf',
-        location: 'Ibadan, Oyo',
-        submitted_at: '05 Nov 2026',
-        status: 'Awaiting review',
-        priority: 'Normal',
-      },
-      {
-        id: 'ET-00103',
-        farm: 'Green Earth',
-        farmer: 'B. James',
-        location: 'Osogbo, Osun',
-        submitted_at: '03 Nov 2026',
-        status: 'Under review',
-        priority: 'Normal',
-      },
-    ];
+    return [];
   }
 }
 
@@ -181,44 +164,56 @@ export default function ReviewQueue() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 text-xs">
-              {filteredItems.map((item) => (
-                <tr key={item.id} className="hover:bg-[#fafbfa] transition-colors">
-                  <td className="py-4 px-5 font-semibold text-gray-900">{item.id}</td>
-                  <td className="py-4 px-4 text-gray-800 font-medium">{item.farm}</td>
-                  <td className="py-4 px-4 text-gray-600">{item.farmer}</td>
-                  <td className="py-4 px-4 text-gray-600">{item.location}</td>
-                  <td className="py-4 px-4 text-gray-600">{item.submitted_at}</td>
-                  <td className="py-4 px-4">
-                    <span className="text-gray-800">{item.status}</span>
-                  </td>
-                  <td className="py-4 px-4">
-                    <span
-                      className={
-                        item.priority === 'High'
-                          ? 'font-medium text-gray-900'
-                          : 'text-gray-600'
-                      }
-                    >
-                      {item.priority}
-                    </span>
-                  </td>
-                  <td className="py-4 px-5 text-right">
-                    <button
-                      onClick={() => navigate(`/auditor/project-inspection/${item.id}`)}
-                      className="text-gray-800 hover:text-[#1b4332] font-medium cursor-pointer transition-colors"
-                    >
-                      Open review
-                    </button>
+              {filteredItems.length > 0 ? (
+                filteredItems.map((item) => (
+                  <tr key={item.id} className="hover:bg-[#fafbfa] transition-colors">
+                    <td className="py-4 px-5 font-semibold text-gray-900">{item.displayId || item.id}</td>
+                    <td className="py-4 px-4 text-gray-800 font-medium">{item.farm}</td>
+                    <td className="py-4 px-4 text-gray-600">{item.farmer}</td>
+                    <td className="py-4 px-4 text-gray-600">{item.location}</td>
+                    <td className="py-4 px-4 text-gray-600">{item.submitted_at}</td>
+                    <td className="py-4 px-4">
+                      <span className="text-gray-800">{item.status}</span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <span
+                        className={
+                          item.priority === 'High'
+                            ? 'font-medium text-gray-900'
+                            : 'text-gray-600'
+                        }
+                      >
+                        {item.priority}
+                      </span>
+                    </td>
+                    <td className="py-4 px-5 text-right">
+                      <button
+                        onClick={() => navigate(`/auditor/project-inspection/${item.id}`)}
+                        className="text-gray-800 hover:text-[#1b4332] font-medium cursor-pointer transition-colors"
+                      >
+                        Open review
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={8} className="py-14 text-center text-xs text-gray-400">
+                    No farm submissions found in the review queue.
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
 
         {/* Table Footer: Pagination */}
         <div className="p-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
-          <span>Showing 1–{filteredItems.length} of 24 projects</span>
+          <span>
+            {filteredItems.length > 0
+              ? `Showing 1–${filteredItems.length} of ${filteredItems.length} projects`
+              : 'Showing 0 projects'}
+          </span>
           <div className="flex items-center gap-4">
             <button className="hover:text-gray-900 cursor-pointer">Previous</button>
             <div className="flex items-center gap-2">
