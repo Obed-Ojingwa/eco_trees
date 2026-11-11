@@ -7,13 +7,21 @@ import FarmProjects from './auditor/FarmProjects';
 import ReviewHistory from './auditor/ReviewHistory';
 import AuditorSettings from './auditor/AuditorSettings';
 import Login from './auth/Login';
-import Signup from './auth/Signup';
 import BuyerLayout from './buyer/BuyerLayout';
 import ExploreProjects from './buyer/ExploreProjects';
 import ProjectDetail from './buyer/ProjectDetail';
 import PurchaseCheckout from './buyer/PurchaseCheckout';
 import MyPortfolio from './buyer/MyPortfolio';
 import HowItWorks from './buyer/HowItWorks';
+import FarmerLayout from './farmer/FarmerLayout';
+import FarmerWelcome from './farmer/FarmerWelcome';
+import FarmerSignup from './farmer/FarmerSignup';
+import FarmerOverview from './farmer/FarmerOverview';
+import RegisterFarm from './farmer/RegisterFarm';
+import MyFarms from './farmer/MyFarms';
+import ProjectProgress from './farmer/ProjectProgress';
+import Earnings from './farmer/Earnings';
+import FarmerProfile from './farmer/FarmerProfile';
 
 export default function App() {
   return (
@@ -21,7 +29,20 @@ export default function App() {
       <Routes>
         {/* Auth routes */}
         <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
+        <Route path="/signup" element={<Navigate to="/farmer/welcome" replace />} />
+
+        {/* Farmer Workspace & Registration Flow */}
+        <Route path="/farmer" element={<FarmerLayout />}>
+          <Route index element={<Navigate to="overview" replace />} />
+          <Route path="welcome" element={<FarmerWelcome />} />
+          <Route path="signup" element={<FarmerSignup />} />
+          <Route path="overview" element={<FarmerOverview />} />
+          <Route path="register" element={<RegisterFarm />} />
+          <Route path="farms" element={<MyFarms />} />
+          <Route path="progress" element={<ProjectProgress />} />
+          <Route path="earnings" element={<Earnings />} />
+          <Route path="profile" element={<FarmerProfile />} />
+        </Route>
 
         {/* Buyer / Marketplace routes */}
         <Route path="/buyer" element={<BuyerLayout />}>
@@ -49,9 +70,9 @@ export default function App() {
         <Route path="/explore" element={<Navigate to="/buyer/explore" replace />} />
         <Route path="/portfolio" element={<Navigate to="/buyer/portfolio" replace />} />
         <Route path="/marketplace" element={<Navigate to="/buyer/explore" replace />} />
-        <Route path="/" element={<Navigate to="/auditor/overview" replace />} />
-        <Route path="/overview" element={<Navigate to="/auditor/overview" replace />} />
-        <Route path="*" element={<Navigate to="/auditor/overview" replace />} />
+        <Route path="/" element={<Navigate to="/farmer/overview" replace />} />
+        <Route path="/overview" element={<Navigate to="/farmer/overview" replace />} />
+        <Route path="*" element={<Navigate to="/farmer/overview" replace />} />
       </Routes>
     </BrowserRouter>
   );
