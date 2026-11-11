@@ -2,7 +2,7 @@
 
 > Turning Smallholder Tree Planting into Verified Carbon Revenue
 
-EcoTrees is a mobile-first, multilingual Digital Measurement, Reporting, and Verification (dMRV) and payout platform for Nigerian smallholder farmers. It replaces slow, expensive manual field audits with satellite data, pools smallholder tree growth into verifiable batches, and routes payouts back to local planters when corporate buyers purchase verified carbon impact.
+EcoTrees is a multilingual Digital Measurement, Reporting, and Verification (dMRV) and payout platform for Nigerian smallholder farmers. It replaces slow, expensive manual field audits with satellite data, pools smallholder tree growth into verifiable batches, and routes payouts back to local planters when corporate buyers purchase verified carbon impact.
 
 ---
 
