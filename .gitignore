@@ -12,8 +12,12 @@ venv/
 .env
 .venv
 backend/.env
+team09.yml
+*.kubeconfig
+backend/.env.forge*
 seed_demo.py
 backend/supabase
 backend/RENDER.md
 frontend/DEPLOYMENT.md
 DEPLOYMENT.md
+Forge_2026_Sandbox_Participant_Platform_Guide.md

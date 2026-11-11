@@ -14,7 +14,7 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: migrate
-          image: <registry>/ecotrees-api:<git-sha>
+          image: ghcr.io/obed-ojingwa/eco_trees:latest
           command:
             - python
             - -m
