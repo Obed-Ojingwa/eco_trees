@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   Trees,
@@ -10,8 +11,53 @@ import {
   Sparkles,
 } from 'lucide-react';
 
+interface CurrentUser {
+  display_name: string;
+  role: string;
+}
+
+type SessionState =
+  | { status: 'checking' }
+  | { status: 'signed-out' }
+  | { status: 'signed-in'; user: CurrentUser }
+  | { status: 'unavailable' };
+
 export default function LandingPage() {
   const navigate = useNavigate();
+  const [session, setSession] = useState<SessionState>({ status: 'checking' });
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    fetch('/api/me', { credentials: 'include', signal: controller.signal })
+      .then(async (response) => {
+        if (response.status === 401) {
+          setSession({ status: 'signed-out' });
+          return;
+        }
+        if (!response.ok) {
+          setSession({ status: 'unavailable' });
+          return;
+        }
+
+        const user: CurrentUser = await response.json();
+        setSession({ status: 'signed-in', user });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setSession({ status: 'unavailable' });
+        }
+      });
+
+    return () => controller.abort();
+  }, []);
+
+  const workspacePath =
+    session.status === 'signed-in' && (session.user.role === 'auditor' || session.user.role === 'admin')
+      ? '/auditor/overview'
+      : session.status === 'signed-in' && session.user.role === 'buyer'
+        ? '/buyer/explore'
+        : '/farmer/overview';
 
   return (
     <div className="min-h-screen bg-[#f7f9f8] text-gray-900 flex flex-col font-sans selection:bg-[#1b4332] selection:text-white">
@@ -53,20 +99,34 @@ export default function LandingPage() {
               <span className="text-gray-400">Pidgin</span>
             </div>
 
-            <Link
-              to="/login"
-              className="text-xs font-semibold text-gray-700 hover:text-[#1b4332] px-3.5 py-2 rounded-xl transition-colors"
-            >
-              Sign in
-            </Link>
+            {session.status === 'signed-in' ? (
+              <Link
+                to={workspacePath}
+                className="bg-[#1e4d3a] hover:bg-[#163c2c] text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+              >
+                <span className="max-w-32 truncate">{session.user.display_name}</span>
+                <ArrowRight size={14} />
+              </Link>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  className="text-xs font-semibold text-gray-700 hover:text-[#1b4332] px-3.5 py-2 rounded-xl transition-colors"
+                >
+                  Sign in
+                </Link>
 
-            <Link
-              to="/farmer/welcome"
-              className="bg-[#1e4d3a] hover:bg-[#163c2c] text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-            >
-              <span>Get started</span>
-              <ArrowRight size={14} />
-            </Link>
+                {session.status === 'signed-out' && (
+                  <Link
+                    to="/login"
+                    className="bg-[#1e4d3a] hover:bg-[#163c2c] text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+                  >
+                    <span>Get started</span>
+                    <ArrowRight size={14} />
+                  </Link>
+                )}
+              </>
+            )}
           </div>
         </div>
       </header>
