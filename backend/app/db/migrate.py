@@ -11,6 +11,20 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 
+def _migration_checksum(content: bytes) -> str:
+    normalized = content.replace(b"\r\n", b"\n")
+    return hashlib.sha256(normalized).hexdigest()
+
+
+def _migration_checksum_matches(checksum: str, content: bytes) -> bool:
+    normalized = content.replace(b"\r\n", b"\n")
+    windows_content = normalized.replace(b"\n", b"\r\n")
+    return checksum in {
+        hashlib.sha256(normalized).hexdigest(),
+        hashlib.sha256(windows_content).hexdigest(),
+    }
+
+
 def migrate(migration_dir: Path | None = None) -> list[str]:
     if not settings.migration_database_url:
         raise RuntimeError("DB_MIGRATION_URL must be set to run database migrations.")
@@ -29,14 +43,17 @@ def migrate(migration_dir: Path | None = None) -> list[str]:
         conn.commit()
         for path in sorted(directory.glob("*.sql")):
             content = path.read_bytes()
-            checksum = hashlib.sha256(content).hexdigest()
+            checksum = _migration_checksum(content)
             with conn.transaction():
                 existing = conn.execute(
                     "SELECT checksum FROM schema_migrations WHERE name = %s",
                     (path.name,),
                 ).fetchone()
                 if existing:
-                    if existing["checksum"] != checksum:
+                    if not _migration_checksum_matches(
+                        existing["checksum"],
+                        content,
+                    ):
                         raise RuntimeError(f"Applied migration changed: {path.name}")
                     continue
                 conn.execute(content.decode("utf-8"))
