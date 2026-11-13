@@ -1,3 +1,5 @@
+from contextlib import contextmanager
+
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -16,6 +18,24 @@ def test_legacy_endpoint_remains_available() -> None:
         "message": "Hello from the FastAPI backend!",
         "status": "success",
     }
+
+
+def test_health_endpoints_return_ok(monkeypatch) -> None:
+    @contextmanager
+    def fake_connection():
+        class FakeConnection:
+            def execute(self, query: str) -> None:
+                assert query == "SELECT 1"
+
+        yield FakeConnection()
+
+    monkeypatch.setattr("app.main.connection", fake_connection)
+
+    for path in ("/health", "/healthz", "/api/healthz"):
+        response = client.get(path)
+
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok"}
 
 
 def test_mutating_api_requires_ecotrees_header() -> None:

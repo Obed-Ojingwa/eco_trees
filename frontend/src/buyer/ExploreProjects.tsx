@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, ChevronDown, MapPin, Info } from 'lucide-react';
+import DemoDataNotice from '../shared/DemoDataNotice';
+import DemoMetricSnapshot from '../shared/DemoMetricSnapshot';
+import { DEMO_FARM_PROJECTS } from '../shared/demoData';
 
 interface MarketplaceProject {
   id: string;
@@ -9,7 +12,18 @@ interface MarketplaceProject {
   trees: number;
   area_ha: number;
   status: string;
+  isDemo?: boolean;
 }
+
+const demoProjects: MarketplaceProject[] = DEMO_FARM_PROJECTS.map((project) => ({
+  id: project.id,
+  name: project.farm,
+  location: project.location,
+  trees: project.trees,
+  area_ha: project.areaHa,
+  status: 'Illustrative sample · not a credit listing',
+  isDemo: true,
+}));
 
 async function fetchMarketplaceProjects(): Promise<MarketplaceProject[]> {
   try {
@@ -69,11 +83,15 @@ async function fetchMarketplaceProjects(): Promise<MarketplaceProject[]> {
 
 export default function ExploreProjects() {
   const navigate = useNavigate();
-  const [projects, setProjects] = useState<MarketplaceProject[]>([]);
+  const [projects, setProjects] = useState<MarketplaceProject[]>(demoProjects);
+  const [usingDemoData, setUsingDemoData] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    fetchMarketplaceProjects().then(setProjects);
+    fetchMarketplaceProjects().then((items) => {
+      setUsingDemoData(items.length === 0);
+      setProjects(items.length > 0 ? items : demoProjects);
+    });
   }, []);
 
   const filtered = projects.filter(
@@ -93,6 +111,17 @@ export default function ExploreProjects() {
           Explore farm projects, see the information behind them and understand what each demo listing includes.
         </p>
       </div>
+
+      {usingDemoData && <DemoDataNotice />}
+
+      <DemoMetricSnapshot
+        title="Buyer demo snapshot"
+        metrics={[
+          { label: 'Sample project listings', value: '03' },
+          { label: 'Trees represented', value: '1,240' },
+          { label: 'Project area', value: '4.8 ha' },
+        ]}
+      />
 
       {/* Filter Row: 4 Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
@@ -198,10 +227,11 @@ export default function ExploreProjects() {
               {/* Action Button */}
               <div className="pt-5">
                 <button
-                  onClick={() => navigate(`/buyer/project/${item.id}`)}
-                  className="w-full border border-gray-200 hover:bg-gray-50 text-gray-800 text-xs font-semibold py-2.5 rounded-xl transition-colors cursor-pointer"
+                  onClick={item.isDemo ? undefined : () => navigate(`/buyer/project/${item.id}`)}
+                  disabled={item.isDemo}
+                  className="w-full border border-gray-200 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 text-gray-800 text-xs font-semibold py-2.5 rounded-xl transition-colors cursor-pointer"
                 >
-                  View project
+                  {item.isDemo ? 'Demo listing · read only' : 'View project'}
                 </button>
               </div>
             </div>

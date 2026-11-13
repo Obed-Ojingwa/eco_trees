@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, ChevronDown } from 'lucide-react';
+import DemoDataNotice from '../shared/DemoDataNotice';
+import { DEMO_FARM_PROJECTS } from '../shared/demoData';
 
 interface ReviewQueueItem {
   id: string;
@@ -11,7 +13,22 @@ interface ReviewQueueItem {
   submitted_at: string;
   status: string;
   priority: string;
+  isDemo?: boolean;
 }
+
+const demoQueue: ReviewQueueItem[] = DEMO_FARM_PROJECTS
+  .filter((project) => project.status !== 'Internally approved')
+  .map((project) => ({
+    id: project.id,
+    displayId: project.id,
+    farm: project.farm,
+    farmer: project.farmer,
+    location: project.location,
+    submitted_at: project.submittedAt,
+    status: project.status,
+    priority: project.priority,
+    isDemo: true,
+  }));
 
 async function fetchReviewQueue(): Promise<ReviewQueueItem[]> {
   try {
@@ -57,11 +74,15 @@ async function fetchReviewQueue(): Promise<ReviewQueueItem[]> {
 
 export default function ReviewQueue() {
   const navigate = useNavigate();
-  const [items, setItems] = useState<ReviewQueueItem[]>([]);
+  const [items, setItems] = useState<ReviewQueueItem[]>(demoQueue);
+  const [usingDemoData, setUsingDemoData] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    fetchReviewQueue().then(setItems);
+    fetchReviewQueue().then((liveItems) => {
+      setUsingDemoData(liveItems.length === 0);
+      setItems(liveItems.length > 0 ? liveItems : demoQueue);
+    });
   }, []);
 
   const filteredItems = items.filter(
@@ -82,6 +103,8 @@ export default function ReviewQueue() {
           Start with resubmissions, then work through the oldest waiting projects.
         </p>
       </div>
+
+      {usingDemoData && <DemoDataNotice />}
 
       {/* Filter Row: 5 Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -187,12 +210,16 @@ export default function ReviewQueue() {
                       </span>
                     </td>
                     <td className="py-4 px-5 text-right">
-                      <button
-                        onClick={() => navigate(`/auditor/project-inspection/${item.id}`)}
-                        className="text-gray-800 hover:text-[#1b4332] font-medium cursor-pointer transition-colors"
-                      >
-                        Open review
-                      </button>
+                      {item.isDemo ? (
+                        <span className="text-gray-400">Sample only</span>
+                      ) : (
+                        <button
+                          onClick={() => navigate(`/auditor/project-inspection/${item.id}`)}
+                          className="text-gray-800 hover:text-[#1b4332] font-medium cursor-pointer transition-colors"
+                        >
+                          Open review
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))

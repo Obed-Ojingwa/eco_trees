@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import DemoMetricSnapshot from '../shared/DemoMetricSnapshot';
 
 interface OverviewStats {
   awaiting_review: string;
@@ -127,6 +128,16 @@ export default function AuditorOverview() {
           See what needs attention and keep each review on track.
         </p>
       </div>
+
+      <DemoMetricSnapshot
+        title="Auditor demo snapshot"
+        metrics={[
+          { label: 'Sample projects', value: '03' },
+          { label: 'Awaiting review', value: '01' },
+          { label: 'Internally approved', value: '01' },
+          { label: 'Changes requested', value: '01' },
+        ]}
+      />
 
       {/* 6 Metric Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
