@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Search, ChevronDown, Clock } from 'lucide-react';
+import DemoDataNotice from '../shared/DemoDataNotice';
+import { DEMO_REVIEW_HISTORY } from '../shared/demoData';
 
 interface HistoryItem {
   id: string;
@@ -45,11 +47,15 @@ async function fetchReviewHistory(): Promise<HistoryItem[]> {
 }
 
 export default function ReviewHistory() {
-  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [history, setHistory] = useState<HistoryItem[]>(DEMO_REVIEW_HISTORY);
+  const [usingDemoData, setUsingDemoData] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    fetchReviewHistory().then(setHistory);
+    fetchReviewHistory().then((items) => {
+      setUsingDemoData(items.length === 0);
+      setHistory(items.length > 0 ? items : DEMO_REVIEW_HISTORY);
+    });
   }, []);
 
   const filteredHistory = history.filter(
@@ -70,6 +76,8 @@ export default function ReviewHistory() {
           See who reviewed each project, what they decided and when.
         </p>
       </div>
+
+      {usingDemoData && <DemoDataNotice />}
 
       {/* Filter Row: 3 Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">

@@ -9,7 +9,6 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
-.env
 .venv
 backend/.env
 team09.yml
@@ -21,3 +20,6 @@ backend/RENDER.md
 frontend/DEPLOYMENT.md
 DEPLOYMENT.md
 Forge_2026_Sandbox_Participant_Platform_Guide.md
+ECOTREES_HACKATHON_PRESENTATION.md
+config.bat
+node_modules
