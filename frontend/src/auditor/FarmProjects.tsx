@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, ChevronDown, MapPin } from 'lucide-react';
+import DemoDataNotice from '../shared/DemoDataNotice';
+import { DEMO_FARM_PROJECTS } from '../shared/demoData';
 
 interface FarmProjectItem {
   id: string;
@@ -9,7 +11,18 @@ interface FarmProjectItem {
   state: string;
   status: string;
   isApproved?: boolean;
+  isDemo?: boolean;
 }
+
+const demoProjects: FarmProjectItem[] = DEMO_FARM_PROJECTS.map((project) => ({
+  id: project.id,
+  farm: project.farm,
+  farmer: project.farmer,
+  state: project.state,
+  status: project.status,
+  isApproved: project.status === 'Internally approved',
+  isDemo: true,
+}));
 
 async function fetchFarmProjects(): Promise<FarmProjectItem[]> {
   try {
@@ -48,11 +61,15 @@ async function fetchFarmProjects(): Promise<FarmProjectItem[]> {
 
 export default function FarmProjects() {
   const navigate = useNavigate();
-  const [projects, setProjects] = useState<FarmProjectItem[]>([]);
+  const [projects, setProjects] = useState<FarmProjectItem[]>(demoProjects);
+  const [usingDemoData, setUsingDemoData] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    fetchFarmProjects().then(setProjects);
+    fetchFarmProjects().then((items) => {
+      setUsingDemoData(items.length === 0);
+      setProjects(items.length > 0 ? items : demoProjects);
+    });
   }, []);
 
   const filteredProjects = projects.filter(
@@ -73,6 +90,8 @@ export default function FarmProjects() {
           Find a project, check its current status or open its review.
         </p>
       </div>
+
+      {usingDemoData && <DemoDataNotice />}
 
       {/* Filter Row: 4 Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -135,11 +154,11 @@ export default function FarmProjects() {
             return (
               <div
                 key={p.id}
-                onClick={() => navigate(`/auditor/project-inspection/${p.id}`)}
-                className={`rounded-xl px-5 py-4 flex items-center text-xs cursor-pointer transition-colors ${
+                onClick={p.isDemo ? undefined : () => navigate(`/auditor/project-inspection/${p.id}`)}
+                className={`rounded-xl px-5 py-4 flex items-center text-xs transition-colors ${
                   isGreen
-                    ? 'bg-[#f0f7f2] text-[#1b4332] hover:bg-[#e6f2e9]'
-                    : 'bg-[#f8faf8] text-gray-700 hover:bg-gray-100/70'
+                    ? `bg-[#f0f7f2] text-[#1b4332] ${p.isDemo ? '' : 'hover:bg-[#e6f2e9]'}`
+                    : `bg-[#f8faf8] text-gray-700 ${p.isDemo ? '' : 'hover:bg-gray-100/70'}`
                 }`}
               >
                 <MapPin
@@ -158,6 +177,11 @@ export default function FarmProjects() {
                 <span className={isGreen ? 'font-semibold text-[#1b4332]' : 'text-gray-600'}>
                   {p.status}
                 </span>
+                {p.isDemo && (
+                  <span className="ml-auto rounded-full bg-white/80 px-2 py-1 text-[10px] font-semibold text-gray-500">
+                    Sample
+                  </span>
+                )}
               </div>
             );
           })

@@ -86,7 +86,7 @@ Updates the signed-in user's display name:
 
 Returns the current-user response shape.
 
-### `GET /healthz` and `GET /api/healthz`
+### `GET /health`, `GET /healthz`, and `GET /api/healthz`
 
 Returns `{"status":"ok"}` when the API can query PostgreSQL. These are readiness checks, not database-free liveness checks.
 
