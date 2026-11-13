@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
+import DemoDataNotice from '../shared/DemoDataNotice';
+import { DEMO_FARM_PROJECTS } from '../shared/demoData';
 
 interface FarmItem {
   id: string;
@@ -9,7 +11,18 @@ interface FarmItem {
   trees: number;
   area_ha: number;
   status: string;
+  isDemo?: boolean;
 }
+
+const demoFarms: FarmItem[] = DEMO_FARM_PROJECTS.map((project) => ({
+  id: project.id,
+  name: project.farm,
+  location: project.location,
+  trees: project.trees,
+  area_ha: project.areaHa,
+  status: project.status,
+  isDemo: true,
+}));
 
 async function fetchMyFarms(): Promise<FarmItem[]> {
   try {
@@ -54,10 +67,14 @@ async function fetchMyFarms(): Promise<FarmItem[]> {
 
 export default function MyFarms() {
   const navigate = useNavigate();
-  const [farms, setFarms] = useState<FarmItem[]>([]);
+  const [farms, setFarms] = useState<FarmItem[]>(demoFarms);
+  const [usingDemoData, setUsingDemoData] = useState(true);
 
   useEffect(() => {
-    fetchMyFarms().then(setFarms);
+    fetchMyFarms().then((items) => {
+      setUsingDemoData(items.length === 0);
+      setFarms(items.length > 0 ? items : demoFarms);
+    });
   }, []);
 
   return (
@@ -81,6 +98,8 @@ export default function MyFarms() {
         </button>
       </div>
 
+      {usingDemoData && <DemoDataNotice />}
+
       {/* Farms List Container */}
       <div className="space-y-4">
         {/* Table Column Labels */}
@@ -98,8 +117,10 @@ export default function MyFarms() {
               return (
                 <div
                   key={farm.id}
-                  onClick={() => navigate('/farmer/progress')}
-                  className="bg-white rounded-2xl border border-gray-100 p-6 shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex items-center justify-between hover:border-gray-200 transition-colors cursor-pointer"
+                  onClick={farm.isDemo ? undefined : () => navigate('/farmer/progress')}
+                  className={`bg-white rounded-2xl border border-gray-100 p-6 shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex items-center justify-between transition-colors ${
+                    farm.isDemo ? '' : 'hover:border-gray-200 cursor-pointer'
+                  }`}
                 >
                   {/* Farm Name & Location */}
                   <div className="w-1/3">
@@ -127,8 +148,14 @@ export default function MyFarms() {
                     </span>
 
                     <span className="text-xs text-gray-700 font-medium flex items-center gap-1 hover:text-[#1b4332]">
-                      <span>View farm</span>
-                      <ChevronRight size={14} />
+                      {farm.isDemo ? (
+                        <span className="text-gray-400">Sample only</span>
+                      ) : (
+                        <>
+                          <span>View farm</span>
+                          <ChevronRight size={14} />
+                        </>
+                      )}
                     </span>
                   </div>
                 </div>

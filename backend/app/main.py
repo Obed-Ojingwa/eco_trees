@@ -195,6 +195,7 @@ async def unhandled_error_handler(request: Request, exc: Exception) -> JSONRespo
 
 @app.get("/healthz")
 @app.get("/api/healthz")
+@app.get("/health")
 def health() -> dict[str, str]:
     with connection() as conn:
         conn.execute("SELECT 1")

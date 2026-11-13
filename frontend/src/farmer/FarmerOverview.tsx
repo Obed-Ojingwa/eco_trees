@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapPin, Clock } from 'lucide-react';
+import DemoMetricSnapshot from '../shared/DemoMetricSnapshot';
 
 interface FarmerOverviewStats {
   farms: string;
@@ -125,6 +126,16 @@ export default function FarmerOverview() {
           Good to have you here. Let’s get your farm set up.
         </p>
       </div>
+
+      <DemoMetricSnapshot
+        title="Farmer demo snapshot"
+        metrics={[
+          { label: 'Sample farms', value: '03' },
+          { label: 'Trees planted', value: '1,240' },
+          { label: 'Plots needing follow-up', value: '02' },
+          { label: 'Restoration area', value: '4.8 ha' },
+        ]}
+      />
 
       {/* Big Action Banner */}
       <div className="bg-[#eaf3ec] rounded-2xl p-8 flex items-center justify-between">
